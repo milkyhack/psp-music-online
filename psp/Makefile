@@ -25,8 +25,8 @@ LIBS = \
 	-lFLAC -logg -lm
 
 EXTRA_TARGETS = EBOOT.PBP
-APP_VER = 1.3.9
-APP_VER_CODE = 159
+APP_VER = 1.3.10
+APP_VER_CODE = 160
 # XMB «Версия» = DISC_VERSION in Sony format X.YZ (e.g. 1.39), not semver.
 DISC_VER = $(shell printf '%d.%02d' $$(($(APP_VER_CODE)/100)) $$(($(APP_VER_CODE)%100)))
 PSP_EBOOT_TITLE = PSP Music $(APP_VER)

@@ -28,8 +28,8 @@ typedef struct {
     char error[64];
 } UpdateStatus;
 
-#define APP_VERSION "1.3.8"
-#define APP_VERSION_CODE 158
+#define APP_VERSION "1.3.10"
+#define APP_VERSION_CODE 160
 
 void updater_init(void);
 const UpdateStatus *updater_status(void);

@@ -24,7 +24,7 @@ static const PlayerSkin SKINS[SKIN_COUNT] = {
      UI_RGB(32, 200, 68),
      UI_RGB(0, 0, 0), UI_RGB(39, 39, 39), UI_RGB(0, 0, 0),
      UI_RGB(32, 200, 68), UI_RGB(233, 70, 70),
-     VIZ_MATRIX_RAIN, COMP_MATRIX, CHROME_NEON, PROG_BAR, CURSOR_BAR, TYPE_MONO, 4, 1},
+     VIZ_SOFT_SPEC, COMP_MATRIX, CHROME_NEON, PROG_BAR, CURSOR_BAR, TYPE_MONO, 4, 1},
 
     /* 1 Ocean */
     {"Ocean",
