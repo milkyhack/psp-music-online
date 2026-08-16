@@ -410,8 +410,8 @@ static void np_draw_transport(int y, const UiNowPlaying *np, const PlayerTheme *
 }
 
 static void np_draw_status_pills(const UiNowPlaying *np, const PlayerTheme *th) {
-    int x = 196;
-    int y = 96;
+    int x = 176;
+    int y = 104;
     if (np->shuffle) {
         ui_gfx_round_fill(x, y, 44, 14, 4, th->card);
         ui_gfx_hairline_rect(x, y, 44, 14, th->accent, 90);
@@ -509,73 +509,47 @@ static void np_draw_download(int x, int y, int w, const UiNowPlaying *np, const 
 
 static void np_draw_cover_hero(const UiNowPlaying *np, const PlayerTheme *th) {
     int has_cover = np->cover && np->cover->ready;
+    /* Lane y=40..184: 144×144 square, no soft halo (Adrenaline 2× sharp). */
+    const int cx = 16;
+    const int cy = 40;
+    const int cs = 144;
+    const int inset = 4;
+    const int art = cs - inset * 2;
+
     if (skin_is_neon(th)) {
-        /* SenseMe-style treatment: the cover is the object, no circular halo behind it. */
-        ui_gfx_fill_alpha(26, 30, 164, 164, UI_RGB(0, 0, 0), 150);
-        ui_gfx_round_fill(16, 16, 168, 168, 8, th->chrome_lo);
-        ui_gfx_hairline_rect(16, 16, 168, 168, th->accent, 95);
-        ui_gfx_round_fill(20, 20, 160, 160, 6, th->bg);
-        ui_gfx_hairline_rect(21, 21, 158, 158, th->chrome_hi, 70);
-        ui_gfx_fill_alpha(24, 24, 152, 1, th->text, 40);
+        ui_gfx_round_fill(cx, cy, cs, cs, 4, th->chrome_lo);
+        ui_gfx_hairline_rect(cx, cy, cs, cs, th->accent, 255);
+        ui_gfx_fill(cx + inset, cy + inset, art, art, th->bg);
         if (has_cover) {
-            ui_image_draw_cover_ex(24, 24, 152, 152, np->cover, 0);
+            ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 0);
         } else {
-            ui_gpu_blit_atlas_cpu(g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, 24, 24, 152, 152, 0xFFFFFFFFu);
+            ui_gpu_blit_atlas_cpu(
+                g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, cx + inset, cy + inset, art, art, 0xFFFFFFFFu
+            );
         }
-        ui_gfx_hairline_rect(24, 24, 152, 152, th->text, 34);
-        ui_gfx_hairline_rect(25, 25, 150, 150, th->accent, 30);
+        ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 90);
         return;
     }
-    /* Soft accent atmosphere behind art */
-    ui_gfx_bloom(100, 100, 94, th->accent, 32);
-    ui_gfx_bloom(100, 100, 70, th->accent, 18);
-    /* Drop shadow for depth */
-    ui_gfx_round_fill(24, 28, 168, 168, 12, UI_RGB(0, 0, 0));
-    ui_gfx_fill_alpha(20, 24, 172, 172, UI_RGB(0, 0, 0), 90);
-    /* Outer frame / elevated well */
-    ui_gfx_round_fill(16, 16, 168, 168, 12, th->chrome_lo);
-    ui_gfx_hairline_rect(16, 16, 168, 168, th->chrome_hi, 90);
-    ui_gfx_round_fill(20, 20, 160, 160, 11, th->surface_elevated ? th->surface_elevated : th->card);
-    ui_gfx_round_fill(22, 22, 156, 156, 10, th->card);
+    ui_gfx_round_fill(cx + 2, cy + 4, cs, cs, 10, UI_RGB(0, 0, 0));
+    ui_gfx_round_fill(cx, cy, cs, cs, 10, th->chrome_lo);
+    ui_gfx_hairline_rect(cx, cy, cs, cs, th->chrome_hi, 90);
+    ui_gfx_round_fill(
+        cx + 2,
+        cy + 2,
+        cs - 4,
+        cs - 4,
+        9,
+        th->surface_elevated ? th->surface_elevated : th->card
+    );
     if (has_cover) {
-        /* CPU blit — GPU overlay often left the hero frame empty on device. */
-        ui_image_draw_cover_ex(24, 24, 152, 152, np->cover, 0);
+        ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 0);
     } else {
-        ui_gpu_blit_atlas_cpu(g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, 24, 24, 152, 152, 0xFFFFFFFFu);
+        ui_gpu_blit_atlas_cpu(
+            g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, cx + inset, cy + inset, art, art, 0xFFFFFFFFu
+        );
     }
-    /* Inner rim + bottom reflection strip */
-    ui_gfx_hairline_rect(24, 24, 152, 152, th->text, 36);
-    ui_gfx_hairline_rect(25, 25, 150, 150, th->accent, 22);
-    ui_gfx_fill_alpha(28, 160, 144, 10, th->text, 22);
-}
-
-static void np_draw_neon_signal_card(int x, int y, int w, int h, const UiNowPlaying *np, const PlayerTheme *th) {
-    const char *state = "READY";
-    u32 state_col = th->muted;
-    int rail_w = 52;
-    if (np->playing && !np->paused) {
-        state = "PLAYING";
-        state_col = th->accent;
-        rail_w = 112;
-    } else if (np->paused) {
-        state = "PAUSED";
-        state_col = th->text;
-        rail_w = 76;
-    } else if (np->buffering) {
-        state = "BUFFERING";
-        state_col = th->warning ? th->warning : th->seek;
-        rail_w = 92;
-    }
-    if (rail_w > w - 24) {
-        rail_w = w - 24;
-    }
-    ui_gfx_round_fill(x, y, w, h, 6, th->card);
-    ui_gfx_hairline_rect(x, y, w, h, th->chrome_hi, 70);
-    ui_gfx_fill(x + 12, y + 10, 3, h - 20, th->accent);
-    ui_font_text(x + 24, y + 9, th->muted, np->online ? "ONLINE STREAM" : "LOCAL PLAYBACK", UI_FONT_SM);
-    ui_font_text(x + 24, y + 25, state_col, state, UI_FONT_MD);
-    ui_gfx_fill(x + w - 126, y + h - 13, 102, 2, th->chrome_lo);
-    ui_gfx_fill(x + w - 126, y + h - 13, rail_w, 2, th->accent);
+    ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 36);
+    ui_gfx_hairline_rect(cx + inset + 1, cy + inset + 1, art - 2, art - 2, th->accent, 22);
 }
 
 /* Real queue list — every visible row is a real track */
@@ -837,7 +811,7 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
         snprintf(artist, sizeof(artist), "Unknown Artist");
     }
 
-    /* Atmosphere */
+    /* Header lane 0–34 — brand only, no track title here. */
     ui_clear(th->bg);
     if (skin_is_neon(th)) {
         ui_gfx_fill(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->bg);
@@ -845,29 +819,30 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
         ui_font_text(30, 10, th->text, "Now Playing", UI_FONT_MD);
         ui_font_icon(400, 8, 14, UI_ICON_SPEAKER, th->muted);
         ui_font_icon(424, 8, 14, UI_ICON_BATTERY, th->accent);
-        ui_gfx_fill_alpha(0, 33, UI_SCREEN_W, 1, th->accent, 120);
+        ui_gfx_fill(0, 33, UI_SCREEN_W, 1, th->accent);
     } else {
         ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
         ui_gfx_fill_alpha(0, 0, UI_SCREEN_W, 1, th->chrome_hi, 60);
         ui_gfx_fill_alpha(0, 1, UI_SCREEN_W, 1, th->accent, 35);
+        ui_font_text(16, 10, th->text, "Now Playing", UI_FONT_MD);
     }
 
     np_draw_cover_hero(np, th);
 
-    /* Right column: title → artist → album → mode pills (no time/format here) */
-    ui_font_text_marquee(196, 24, 268, th->text, title, UI_FONT_LG);
+    /* Right column: title → artist → album → pills (below header, clear of cover). */
+    ui_font_text_marquee(176, 42, 288, th->text, title, UI_FONT_LG);
     artist_col = ui_gfx_lerp(th->text, th->muted, 90);
     if (skin_is_neon(th)) {
-        ui_font_icon(196, 48, 12, UI_ICON_USER, th->muted);
-        ui_font_text_clip(214, 50, 250, artist_col, artist, UI_FONT_MD);
+        ui_font_icon(176, 66, 12, UI_ICON_USER, th->muted);
+        ui_font_text_clip(194, 68, 260, artist_col, artist, UI_FONT_MD);
         if (album[0]) {
-            ui_font_icon(196, 70, 12, UI_ICON_DISC, th->muted);
-            ui_font_text_clip(214, 72, 200, th->muted, album, UI_FONT_SM);
+            ui_font_icon(176, 86, 12, UI_ICON_DISC, th->muted);
+            ui_font_text_clip(194, 88, 220, th->muted, album, UI_FONT_SM);
         }
     } else {
-        ui_font_text_clip(196, 50, 268, artist_col, artist, UI_FONT_MD);
+        ui_font_text_clip(176, 68, 288, artist_col, artist, UI_FONT_MD);
         if (album[0]) {
-            ui_font_text_clip(196, 72, 200, th->muted, album, UI_FONT_SM);
+            ui_font_text_clip(176, 88, 220, th->muted, album, UI_FONT_SM);
         }
     }
     if (np->rating > 0) {
@@ -877,21 +852,19 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
             stars[si] = (si < np->rating) ? '*' : '-';
         }
         stars[5] = '\0';
-        ui_font_text(404, 72, th->accent, stars, UI_FONT_SM);
+        ui_font_text(400, 88, th->accent, stars, UI_FONT_SM);
     }
     np_draw_status_pills(np, th);
-    if (skin_is_neon(th)) {
-        np_draw_neon_signal_card(196, 118, 268, 50, np, th);
-    } else {
-        viz_draw(196, 128, 268, 40, np->playing && !np->paused, th);
-    }
 
-    /* One format line under cover only — never overlaps the scrubber */
+    /* One viz band only — no duplicate PLAYING signal card. */
+    viz_draw(176, 124, 288, 44, np->playing && !np->paused, th);
+
+    /* One meta line under cover / viz. */
     fmt = np->format_name && np->format_name[0] ? np->format_name : "—";
     if (np->buffer_state == 7 /* NETWORK_LOST */ ||
         (np->buffering && np->buffered_sec < 2.0f && np->dl_bytes > 0 && !np->playing)) {
         snprintf(meta, sizeof(meta), "Reconnecting...");
-        ui_font_text_clip(20, 186, 160, th->warning ? th->warning : th->seek, meta, UI_FONT_SM);
+        ui_font_text_clip(16, 188, 200, th->warning ? th->warning : th->seek, meta, UI_FONT_SM);
     } else if (np->lossless) {
         snprintf(
             meta,
@@ -902,7 +875,7 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
             np->sample_khz > 0 ? np->sample_khz : 44,
             np->bit_depth > 0 ? np->bit_depth : 16
         );
-        ui_font_text_clip(20, 186, 168, th->muted, meta, UI_FONT_SM);
+        ui_font_text_clip(16, 188, 200, th->muted, meta, UI_FONT_SM);
     } else {
         if (np->bitrate_kbps > 0) {
             snprintf(
@@ -916,27 +889,27 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
         } else {
             snprintf(meta, sizeof(meta), "%s %s", np->online ? "ON" : "OFF", fmt);
         }
-        ui_font_text_clip(20, 186, 168, th->muted, meta, UI_FONT_SM);
+        ui_font_text_clip(16, 188, 200, th->muted, meta, UI_FONT_SM);
     }
     if (np->buffered_sec > 0.5f && np->online) {
         char bufsec[24];
         snprintf(bufsec, sizeof(bufsec), "buf %.0fs", np->buffered_sec);
-        ui_font_text_clip(196, 186, 100, th->lcd_dim, bufsec, UI_FONT_SM);
+        ui_font_text_clip(220, 188, 100, th->lcd_dim, bufsec, UI_FONT_SM);
     }
 
-    /* Scrubber band: elapsed | bar | duration — exclusive lane */
+    /* Scrubber exclusive lane. */
     el = np->elapsed_ms / 1000;
     dur = np->duration_ms / 1000;
     if (el < 0) el = 0;
     if (dur < 0) dur = 0;
     snprintf(elbuf, sizeof(elbuf), "%d:%02d", el / 60, el % 60);
     snprintf(durbuf, sizeof(durbuf), "%d:%02d", dur / 60, dur % 60);
-    ui_font_text(20, 204, th->text, elbuf, UI_FONT_SM);
+    ui_font_text(16, 204, th->text, elbuf, UI_FONT_SM);
     ui_font_text(430, 204, th->muted, durbuf, UI_FONT_SM);
-    np_draw_progress(58, 208, 360, 5, np->elapsed_ms, np->duration_ms, th);
+    np_draw_progress(52, 208, 368, 5, np->elapsed_ms, np->duration_ms, th);
 
-    np_draw_download(20, 222, 160, np, th);
-    np_draw_transport(232, np, th);
+    np_draw_download(16, 226, 200, np, th);
+    np_draw_transport(252, np, th);
 
     if (np->queue_focus) {
         np_draw_queue(60, 20, 360, 200, np, th, 0);
@@ -1156,13 +1129,15 @@ void ui_draw_library_ex(
     const PlayerTheme *th = theme_active();
     int i;
     int neon = skin_is_neon(th);
-    int row_h = neon ? 34 : 32;
+    int show_thumbs = (track_ids != NULL);
+    int has_icons = (icons != NULL);
+    int thumb = show_thumbs ? 28 : 0;
+    int text_pad = show_thumbs ? (20 + thumb + 8) : (has_icons ? 44 : 28);
+    int row_h = show_thumbs ? (neon ? 36 : 34) : (neon ? 34 : 32);
     int top = neon ? 42 : 40;
     int footer_h = 0;
     int visible;
     int start = 0;
-    int show_thumbs = (track_ids != NULL);
-    int has_icons = (icons != NULL);
 
     if (mini && mini->now_title && mini->now_title[0]) {
         footer_h = 48;
@@ -1185,7 +1160,7 @@ void ui_draw_library_ex(
     for (i = 0; i < visible; i++) {
         int idx = start + i;
         int y = top + i * row_h;
-        int text_x = show_thumbs ? 56 : (has_icons ? 44 : 28);
+        int text_x = text_pad;
         char label[96];
         int n = 0;
         u32 rights_col;
@@ -1211,12 +1186,16 @@ void ui_draw_library_ex(
         }
         if (show_thumbs) {
             const UiCover *c = ui_image_cover_for(track_ids[idx]);
-            ui_gfx_round_fill(22, y + 4, 24, 24, neon ? 2 : 5, th->chrome_lo);
+            int ty = y + (row_h - thumb) / 2;
+            ui_gfx_round_fill(20, ty, thumb, thumb, neon ? 2 : 4, th->chrome_lo);
             if (c && c->ready) {
-                ui_image_draw_cover(23, y + 5, 22, 22, c);
+                ui_image_draw_cover(21, ty + 1, thumb - 2, thumb - 2, c);
             } else {
-                ui_gpu_blit_atlas_cpu(g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, 23, y + 5, 22, 22, 0xFFFFFFFFu);
+                ui_gpu_blit_atlas_cpu(
+                    g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, 21, ty + 1, thumb - 2, thumb - 2, 0xFFFFFFFFu
+                );
             }
+            ui_gfx_hairline_rect(21, ty + 1, thumb - 2, thumb - 2, th->accent, neon ? 70 : 40);
         }
         if (labels && labels[idx]) {
             while (labels[idx][n] && n < 95) {
@@ -1237,6 +1216,16 @@ void ui_draw_library_ex(
             rights_col = (neon || idx == cursor) ? th->accent : th->muted;
             ui_font_text_clip(UI_SCREEN_W - 176, y + 9, 168, rights_col, rights[idx], UI_FONT_SM);
         }
+    }
+
+    if (count <= 0) {
+        int mid_y = top + ((UI_SCREEN_H - top - footer_h) / 2) - 12;
+        const char *empty_msg = "Nothing here";
+        if (title && title[0] == 'S' && title[1] == 'e' && title[2] == 'a') {
+            empty_msg = "No results";
+        }
+        ui_font_text(140, mid_y, th->muted, empty_msg, UI_FONT_MD);
+        ui_font_text(156, mid_y + 20, th->lcd_dim, "O = Back", UI_FONT_SM);
     }
 
     if (mini && mini->now_title && mini->now_title[0]) {

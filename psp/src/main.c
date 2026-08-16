@@ -298,7 +298,6 @@ static void format_host_port(char *out, int out_sz) {
 }
 
 static void set_home_menu(void) {
-    char hp[72];
     g_count = 0;
     g_cursor = 0;
     g_home_np = g_home_top = g_home_wifi = g_home_setup = g_home_appear = g_home_more = -1;
@@ -323,7 +322,6 @@ static void set_home_menu(void) {
         ADD("Now Playing", right, UI_ICON_NOTE);
     }
 
-    /* Home layout matches README Neon Terminal mockup. */
     {
         char r[32];
         int n = offline_count();
@@ -339,22 +337,8 @@ static void set_home_menu(void) {
     g_home_online = g_count;
     ADD("Online Library", g_online_mode ? "ready" : (g_net_ok ? "no server" : "need WiFi"), UI_ICON_GLOBE);
 
-    g_home_top = g_count;
-    ADD("Top Rated", "", UI_ICON_STAR);
-
-    g_home_wifi = g_count;
-    ADD("Connect Wi-Fi", g_net_ok ? "OK" : "Press X", UI_ICON_WIFI);
-
-    format_host_port(hp, sizeof(hp));
-    g_home_setup = g_count;
-    ADD("Setup IP/Port", hp, UI_ICON_NET);
-
-    g_home_appear = g_count;
-    ADD("Appearance", "skins", UI_ICON_BRUSH);
-
-    g_home_more = g_count;
-    g_home_settings = g_home_more;
-    ADD("More", "API · diag", UI_ICON_GEAR);
+    g_home_settings = g_count;
+    ADD("Settings", "IP · theme · WiFi", UI_ICON_GEAR);
 #undef ADD
     bind_list_ptrs();
     g_icons_n = g_count;
@@ -364,6 +348,7 @@ static void set_settings_menu(void) {
     char hp[72];
     g_count = 0;
     g_cursor = 0;
+    g_icons_n = 0;
 #define ADD(label, right) \
     do { \
         clip_copy(g_items[g_count].name, MAX_NAME, label); \
@@ -376,6 +361,7 @@ static void set_settings_menu(void) {
     format_host_port(hp, sizeof(hp));
     ADD("Server IP/Port", hp);
     ADD("Theme", "skins");
+    ADD("Connect Wi-Fi", g_net_ok ? "OK" : "Press X");
     ADD("Controls help", "buttons");
     ADD("API Key", g_cfg.api_key[0] ? "set" : "off");
     ADD("Diagnostics", "audio/net/ms");
@@ -1003,10 +989,13 @@ static void load_search(void) {
     char *body = NULL;
     char enc[MAX_NAME * 3];
     int i;
+    int api_ok;
 
     if (!g_search_query[0]) {
         g_count = 0;
+        g_list_kind = LIST_SEARCH;
         bind_list_ptrs();
+        set_status("Enter a search");
         return;
     }
     url_encode(g_search_query, enc, sizeof(enc));
@@ -1019,7 +1008,8 @@ static void load_search(void) {
         MAX_LIST_ITEMS
     );
     g_count = 0;
-    if (api_get(path, &body) == 0) {
+    api_ok = (api_get(path, &body) == 0);
+    if (api_ok) {
         g_count = jutil_parse_tracks(body, g_items, MAX_LIST_ITEMS);
         free(body);
         for (i = 0; i < g_count; i++) {
@@ -1028,7 +1018,9 @@ static void load_search(void) {
     }
     g_list_kind = LIST_SEARCH;
     bind_list_ptrs();
-    if (g_count == 0) {
+    if (!api_ok) {
+        set_status("Search failed");
+    } else if (g_count == 0) {
         set_status("No results");
     }
 }
@@ -1127,11 +1119,10 @@ static const char *screen_title(void) {
 
 static const char *screen_title_with_page(void) {
     const char *base = screen_title();
-    char base_buf[96];
 
     if (g_screen == SCREEN_SEARCH && g_search_query[0]) {
-        snprintf(base_buf, sizeof(base_buf), "%s: %.16s", base, g_search_query);
-        base = base_buf;
+        snprintf(g_title_buf, sizeof(g_title_buf), "%s: %.16s", base, g_search_query);
+        base = g_title_buf;
     }
     if (!list_supports_pagination()) {
         return base;
@@ -1139,7 +1130,14 @@ static const char *screen_title_with_page(void) {
     if (g_offset > 0 || g_count >= MAX_LIST_ITEMS) {
         int from = g_offset + 1;
         int to = g_offset + g_count;
-        snprintf(g_title_buf, sizeof(g_title_buf), "%.48s (%d-%d)", base, from, to);
+        /* Reuse g_title_buf; if base already points here, format into a temp first. */
+        if (base == g_title_buf) {
+            char tmp[96];
+            clip_copy(tmp, (int)sizeof(tmp), g_title_buf);
+            snprintf(g_title_buf, sizeof(g_title_buf), "%.48s (%d-%d)", tmp, from, to);
+        } else {
+            snprintf(g_title_buf, sizeof(g_title_buf), "%.48s (%d-%d)", base, from, to);
+        }
         return g_title_buf;
     }
     return base;
@@ -2897,17 +2895,17 @@ int main(int argc, char *argv[]) {
                     skip_track(1);
                 }
                 if (pressed & PSP_CTRL_SELECT) {
-                    /* SELECT: track info overlay → EQ → off (no screen jump). */
-                    if (g_show_track_info) {
+                    /* SELECT = EQ; L+SELECT = track info (rating with Square). */
+                    if (pad.Buttons & PSP_CTRL_LTRIGGER) {
+                        g_show_eq = 0;
+                        g_show_track_info = !g_show_track_info;
+                    } else {
                         g_show_track_info = 0;
                         g_show_eq = 1;
                         g_eq_cursor = g_eq_preset;
-                    } else {
-                        g_show_track_info = 1;
-                        g_show_eq = 0;
                     }
                 }
-                if (pressed & PSP_CTRL_LTRIGGER) {
+                if ((pressed & PSP_CTRL_LTRIGGER) && !(pad.Buttons & PSP_CTRL_SELECT)) {
                     g_shuffle = !g_shuffle;
                     if (g_shuffle && g_count > 1) {
                         shuffle_rebuild(g_play_index >= 0 ? g_play_index : g_cursor);
@@ -3116,8 +3114,8 @@ int main(int argc, char *argv[]) {
                                  g_now_sample_rate, g_now_bit_depth > 0 ? g_now_bit_depth : 16);
                         ui_text_clip(28, 128, 420, th->muted, line);
                     }
-                    ui_text_clip(28, 150, 420, th->accent, "SELECT = EQ   O = close info");
-                    ui_text_clip(28, 170, 420, th->muted, "Stick L/R = seek   L/R = skip");
+                    ui_text_clip(28, 150, 420, th->accent, "Square = rate   O = close info");
+                    ui_text_clip(28, 170, 420, th->muted, "SELECT = EQ   Stick L/R = seek");
                 }
             }
         } else if (g_screen == SCREEN_APPEARANCE) {
@@ -3370,10 +3368,15 @@ int main(int argc, char *argv[]) {
                 }
             } else {
             /* Always show live host:port (Setup may have changed g_cfg). */
-            if (g_screen == SCREEN_HOME && g_home_setup >= 0 && g_home_setup < g_count) {
-                format_host_port(g_rights[g_home_setup], (int)sizeof(g_rights[0]));
-            } else if (g_screen == SCREEN_SETTINGS && g_count > 0) {
+            if (g_screen == SCREEN_SETTINGS && g_count > 0) {
                 format_host_port(g_rights[0], (int)sizeof(g_rights[0]));
+                if (g_count > 2) {
+                    clip_copy(
+                        g_rights[2],
+                        (int)sizeof(g_rights[0]),
+                        g_net_ok ? "OK" : "Press X"
+                    );
+                }
             }
             draw_current_library();
 
@@ -3465,28 +3468,7 @@ int main(int argc, char *argv[]) {
                         } else {
                             set_home_menu();
                         }
-                    } else if (g_cursor == g_home_top) {
-                        set_status("Opening Wi-Fi...");
-                        if (ensure_online()) {
-                            load_top();
-                        } else {
-                            set_home_menu();
-                        }
-                    } else if (g_cursor == g_home_wifi) {
-                        set_status("Opening Wi-Fi...");
-                        try_connect();
-                        set_home_menu();
-                    } else if (g_cursor == g_home_setup) {
-                        g_setup_octet = 0;
-                        g_setup_focus = 0;
-                        g_setup_return = SCREEN_HOME;
-                        g_screen = SCREEN_SETUP;
-                    } else if (g_cursor == g_home_appear) {
-                        g_appear_skin = skin_get_id();
-                        skin_set_preview(g_appear_skin);
-                        g_appear_return = SCREEN_HOME;
-                        g_screen = SCREEN_APPEARANCE;
-                    } else if (g_cursor == g_home_more) {
+                    } else if (g_cursor == g_home_settings) {
                         set_settings_menu();
                         g_screen = SCREEN_SETTINGS;
                     }
@@ -3502,6 +3484,11 @@ int main(int argc, char *argv[]) {
                         g_appear_return = SCREEN_SETTINGS;
                         g_screen = SCREEN_APPEARANCE;
                     } else if (g_cursor == 2) {
+                        set_status("Opening Wi-Fi...");
+                        try_connect();
+                        set_settings_menu();
+                        g_cursor = 2;
+                    } else if (g_cursor == 3) {
                         clip_copy(g_info_title, sizeof(g_info_title), "Controls");
                         clip_copy(g_info_line1, sizeof(g_info_line1), "PSP button map");
                         clip_copy(
@@ -3510,20 +3497,21 @@ int main(int argc, char *argv[]) {
                             "X play/pause  O back  Square stop  "
                             "D-pad L/R skip  U/D volume  "
                             "Stick L/R seek (release=jump)  Stick U/D vol  "
-                            "L shuffle  R repeat  SELECT info/EQ  "
+                            "L shuffle  R repeat  SELECT = EQ  "
+                            "L+SELECT = track info (Square rates)  "
                             "Triangle = Now Playing (or Home)  START save offline"
                         );
                         clip_copy(
                             g_info_line3,
                             sizeof(g_info_line3),
-                            "SELECT then Square = rate stars. "
+                            "L+SELECT then Square = rate stars. "
                             "Stick L/R scrub, release to jump. "
                             "Home > Now Playing returns without restarting. "
                             "Updates: Game > Music Updater."
                         );
                         g_info_return_screen = SCREEN_SETTINGS;
                         g_screen = SCREEN_INFO;
-                    } else if (g_cursor == 3) {
+                    } else if (g_cursor == 4) {
                         char key[MAX_API_KEY];
                         key[0] = '\0';
                         if (osk_prompt("API Key", "Server X-Api-Key", g_cfg.api_key, key, sizeof(key))) {
@@ -3532,7 +3520,7 @@ int main(int argc, char *argv[]) {
                             config_save(&g_cfg);
                             set_status(g_cfg.api_key[0] ? "API key saved" : "API key cleared");
                             set_settings_menu();
-                            g_cursor = 3;
+                            g_cursor = 4;
                             if (osk_gu_was_used()) {
                                 ui_init();
                                 ui_gpu_reset();
@@ -3541,9 +3529,9 @@ int main(int argc, char *argv[]) {
                             ui_init();
                             ui_gpu_reset();
                         }
-                    } else if (g_cursor == 4) {
-                        g_screen = SCREEN_DIAG;
                     } else if (g_cursor == 5) {
+                        g_screen = SCREEN_DIAG;
+                    } else if (g_cursor == 6) {
                         char verline[64];
                         snprintf(verline, sizeof(verline), "PSP Music %s  (code %d)", APP_VERSION, APP_VERSION_CODE);
                         clip_copy(g_info_title, sizeof(g_info_title), "Version");
@@ -3572,13 +3560,26 @@ int main(int argc, char *argv[]) {
                                     ui_init();
                                     ui_gpu_reset();
                                 }
-                                clip_copy(g_search_query, sizeof(g_search_query), query);
-                                g_offset = 0;
-                                set_status("Searching...");
-                                dbg_log("Q", "main.c:search", "query_start", "{}");
-                                load_search();
-                                g_screen = SCREEN_SEARCH;
-                                dbg_log("Q", "main.c:search", "query_done", "{}");
+                                /* Trim leading spaces; reject empty query. */
+                                {
+                                    char *p = query;
+                                    while (*p == ' ' || *p == '\t') {
+                                        p++;
+                                    }
+                                    if (!*p) {
+                                        set_status("Enter a search");
+                                        set_music_menu();
+                                        g_screen = SCREEN_MUSIC;
+                                    } else {
+                                        clip_copy(g_search_query, sizeof(g_search_query), p);
+                                        g_offset = 0;
+                                        set_status("Searching...");
+                                        dbg_log("Q", "main.c:search", "query_start", "{}");
+                                        load_search();
+                                        g_screen = SCREEN_SEARCH;
+                                        dbg_log("Q", "main.c:search", "query_done", "{}");
+                                    }
+                                }
                             } else if (osk_gu_was_used()) {
                                 ui_init();
                                 ui_gpu_reset();

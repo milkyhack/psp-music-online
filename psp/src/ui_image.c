@@ -30,6 +30,83 @@ static struct {
 } g_fail[UI_COVER_FAIL_MAX];
 static unsigned g_fail_clock;
 
+/* Fit source into UI_COVER_SIZE square (contain / letterbox). */
+static void cover_fit_box(int src_w, int src_h, int *dw, int *dh, int *ox, int *oy) {
+    if (src_w < 1) {
+        src_w = 1;
+    }
+    if (src_h < 1) {
+        src_h = 1;
+    }
+    if (src_w >= src_h) {
+        *dw = UI_COVER_SIZE;
+        *dh = (src_h * UI_COVER_SIZE) / src_w;
+        if (*dh < 1) {
+            *dh = 1;
+        }
+    } else {
+        *dh = UI_COVER_SIZE;
+        *dw = (src_w * UI_COVER_SIZE) / src_h;
+        if (*dw < 1) {
+            *dw = 1;
+        }
+    }
+    *ox = (UI_COVER_SIZE - *dw) / 2;
+    *oy = (UI_COVER_SIZE - *dh) / 2;
+}
+
+static void cover_blit_png_contain(png_bytep *rows, int width, int height, UiCover *out) {
+    int dw, dh, ox, oy, y, x;
+    cover_fit_box(width, height, &dw, &dh, &ox, &oy);
+    memset(out->pixels, 0, sizeof(out->pixels));
+    for (y = 0; y < dh; y++) {
+        int sy = (y * height) / dh;
+        png_bytep row;
+        if (sy >= height) {
+            sy = height - 1;
+        }
+        row = rows[sy];
+        for (x = 0; x < dw; x++) {
+            int sx = (x * width) / dw;
+            png_bytep p;
+            if (sx >= width) {
+                sx = width - 1;
+            }
+            p = row + sx * 4;
+            out->pixels[(oy + y) * UI_COVER_SIZE + (ox + x)] =
+                0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
+        }
+    }
+}
+
+static void cover_blit_rgb_contain(
+    const unsigned char *rgb,
+    int width,
+    int height,
+    int row_stride,
+    UiCover *out
+) {
+    int dw, dh, ox, oy, y, x;
+    cover_fit_box(width, height, &dw, &dh, &ox, &oy);
+    memset(out->pixels, 0, sizeof(out->pixels));
+    for (y = 0; y < dh; y++) {
+        int sy = (y * height) / dh;
+        if (sy >= height) {
+            sy = height - 1;
+        }
+        for (x = 0; x < dw; x++) {
+            int sx = (x * width) / dw;
+            const unsigned char *p;
+            if (sx >= width) {
+                sx = width - 1;
+            }
+            p = rgb + sy * row_stride + sx * 3;
+            out->pixels[(oy + y) * UI_COVER_SIZE + (ox + x)] =
+                0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
+        }
+    }
+}
+
 static int cover_fail_blocked(int track_id) {
     int i;
     g_fail_clock++;
@@ -267,18 +344,7 @@ static int decode_png_file(const char *path, UiCover *out, int track_id) {
     }
     png_read_image(png_ptr, rows);
 
-    memset(out->pixels, 0, sizeof(out->pixels));
-    for (y = 0; y < UI_COVER_SIZE; y++) {
-        int sy = (y * height) / UI_COVER_SIZE;
-        int x;
-        png_bytep row = rows[sy];
-        for (x = 0; x < UI_COVER_SIZE; x++) {
-            int sx = (x * width) / UI_COVER_SIZE;
-            png_bytep p = row + sx * 4;
-            out->pixels[y * UI_COVER_SIZE + x] =
-                0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
-        }
-    }
+    cover_blit_png_contain(rows, (int)width, (int)height, out);
 
     for (y = 0; y < height; y++) {
         free(rows[y]);
@@ -627,18 +693,7 @@ static int decode_png_mem(const unsigned char *data, int len, UiCover *out, int 
         }
     }
     png_read_image(png_ptr, rows);
-    memset(out->pixels, 0, sizeof(out->pixels));
-    for (y = 0; y < UI_COVER_SIZE; y++) {
-        int sy = (int)((y * height) / UI_COVER_SIZE);
-        int x;
-        png_bytep row = rows[sy];
-        for (x = 0; x < UI_COVER_SIZE; x++) {
-            int sx = (int)((x * width) / UI_COVER_SIZE);
-            png_bytep p = row + sx * 4;
-            out->pixels[y * UI_COVER_SIZE + x] =
-                0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
-        }
-    }
+    cover_blit_png_contain(rows, (int)width, (int)height, out);
     for (y = 0; y < height; y++) {
         free(rows[y]);
     }
@@ -717,24 +772,7 @@ static int decode_jpeg_mem(const unsigned char *data, int len, UiCover *out, int
     jpeg_finish_decompress(&cinfo);
     jpeg_destroy_decompress(&cinfo);
 
-    memset(out->pixels, 0, sizeof(out->pixels));
-    for (y = 0; y < UI_COVER_SIZE; y++) {
-        int sy = (y * height) / UI_COVER_SIZE;
-        int x;
-        if (sy >= height) {
-            sy = height - 1;
-        }
-        for (x = 0; x < UI_COVER_SIZE; x++) {
-            int sx = (x * width) / UI_COVER_SIZE;
-            unsigned char *p;
-            if (sx >= width) {
-                sx = width - 1;
-            }
-            p = rgb + sy * row_stride + sx * 3;
-            out->pixels[y * UI_COVER_SIZE + x] =
-                0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
-        }
-    }
+    cover_blit_rgb_contain(rgb, width, height, row_stride, out);
     free(rgb);
     out->width = UI_COVER_SIZE;
     out->height = UI_COVER_SIZE;

@@ -135,8 +135,8 @@ Or on the PSP: **Setup IP/Port** → set octets → it saves automatically.
 | **D-pad L/R** | Now Playing | Skip track |
 | **D-pad U/D** | Now Playing | Volume |
 | **L / R** | Now Playing | Shuffle / Repeat |
-| **SELECT** | Now Playing | Info → EQ → off |
-| **SELECT** then **□** | Now Playing | Rate stars |
+| **SELECT** | Now Playing | Equalizer |
+| **L + SELECT** | Now Playing | Track info (then **□** rates) |
 | **START** | Now Playing | Save offline |
 | **SELECT** | Setup | Edit IP / port |
 
@@ -194,6 +194,21 @@ On the PSP: **Settings → USB Connection**. If the volume appears as `NO NAME` 
 <summary><strong>Cannot delete files on the PSP</strong></summary>
 
 Usually the Memory Stick / adapter is locked, or the FAT volume is dirty. That is not a player bug.
+</details>
+
+<details>
+<summary><strong>Blurry / soft UI on PS Vita (Adrenaline)</strong></summary>
+
+Adrenaline upscales the native **480×272** frame. Soft bilinear makes menus look muddy.
+
+Recommended:
+
+1. Adrenaline → Official Settings → **Bilinear Filtering OFF**
+2. Graphics Filtering → **Sharp bilinear** (or Sharp bilinear without scanlines)
+3. Smooth Graphics → **No** for classic Sharp bilinear; **Yes** for without-scanlines
+4. Scale X / Y → **2.00**
+
+More detail: [`docs/PSP_GRAPHICS_NOTES.md`](docs/PSP_GRAPHICS_NOTES.md).
 </details>
 
 <details>
@@ -359,8 +374,8 @@ ms0:/PSP/GAME/PSPMUSICUPD/EBOOT.PBP   ← Music Updater
 | **D-pad L/R** | Now Playing | Предыдущий / следующий трек |
 | **D-pad U/D** | Now Playing | Громкость |
 | **L / R** | Now Playing | Shuffle / Repeat |
-| **SELECT** | Now Playing | Инфо → EQ → выкл. |
-| **SELECT** затем **□** | Now Playing | Оценка звёздами |
+| **SELECT** | Now Playing | Эквалайзер |
+| **L + SELECT** | Now Playing | Инфо о треке (дальше **□** — оценка) |
 | **START** | Now Playing | Сохранить офлайн |
 | **SELECT** | Setup | Редактировать IP / порт |
 
@@ -418,6 +433,21 @@ Wi‑Fi PSP (~802.11b) не обеспечивает стабильный lossle
 <summary><strong>Файлы на PSP не удаляются</strong></summary>
 
 Чаще всего LOCK на Memory Stick / адаптере или «грязная» FAT. Это не баг плеера.
+</details>
+
+<details>
+<summary><strong>Мыло / размытый UI на PS Vita (Adrenaline)</strong></summary>
+
+Adrenaline апскейлит кадр **480×272**. Мягкий bilinear «мажет» меню.
+
+Рекомендуется:
+
+1. Adrenaline → Official Settings → **Bilinear Filtering OFF**
+2. Graphics Filtering → **Sharp bilinear** (или Sharp bilinear without scanlines)
+3. Smooth Graphics → **No** для обычного Sharp bilinear; **Yes** для without-scanlines
+4. Scale X / Y → **2.00**
+
+Подробнее: [`docs/PSP_GRAPHICS_NOTES.md`](docs/PSP_GRAPHICS_NOTES.md).
 </details>
 
 <details>
