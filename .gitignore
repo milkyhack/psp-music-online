@@ -1,0 +1,34 @@
+.venv/
+.venv-mac/
+__pycache__/
+*.pyc
+.env
+*.o
+*.elf
+*.prx
+*.sfo
+EBOOT.PBP
+PARAM.SFO
+_strip.elf
+_upd_strip.elf
+.vscode/
+*.log
+.DS_Store
+# Local runtime data (library DB, covers, transcode cache, client logs)
+server/data/
+server/sample_music/
+# Keep OTA client binaries out of git — build with `make companion`
+psp/tools/atracdenc-src/
+psp/tools/atracdenc.zip
+psp/assets/SND0.AT3.bad132
+
+# Keep shared writing skill; ignore other Cursor local state
+dist-release/
+
+# Cursor: ignore local state, keep shared skills/rules
+.cursor/*
+!.cursor/
+!.cursor/skills/
+!.cursor/skills/**
+!.cursor/rules/
+!.cursor/rules/**

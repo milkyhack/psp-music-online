@@ -1,0 +1,14 @@
+---
+description: Commits and GitHub releases must be authored only as milkyhack/Mikki — never Cursor
+alwaysApply: true
+---
+
+# Git authorship (milkyhack only)
+
+When committing, pushing, tagging, or creating GitHub releases for this repo:
+
+1. Author and committer must be **Mikki** `<65305777+milkyhack@users.noreply.github.com>` (or the matching GitHub noreply for milkyhack).
+2. **Never** add `Co-authored-by: Cursor`, `cursoragent`, or `Made with Cursor` / `Made-with: Cursor` trailers.
+3. Prefer `git -c user.name=Mikki -c user.email=65305777+milkyhack@users.noreply.github.com` if identity is unclear.
+4. After any commit, verify with `git log -1 --format=full` that no Cursor trailer exists; if it does, rewrite the message before push.
+5. Do not use cloud/background agents for git push on this repo if they force Cursor authorship — use local commits only.

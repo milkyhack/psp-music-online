@@ -1,0 +1,97 @@
+PSP Music Online Non-Commercial Attribution License (PMO-NC-1.0)
+Copyright (c) 2026 milkyhack
+Original project: https://github.com/milkyhack/psp-music-online
+
+==============================================================================
+SUMMARY (not a substitute for the terms below)
+==============================================================================
+You MAY: use, study, modify, and share this software — for free.
+You MUST: keep copyright notices, credit the authors, and link to the original
+          repository in every copy, fork, and public distribution.
+You MUST NOT: sell this software, charge for copies/forks, or use it as part of
+              a paid product or commercial service.
+
+==============================================================================
+1. Definitions
+==============================================================================
+"Software" means this repository and all included source, binaries, assets,
+and documentation, except third-party components under their own licenses.
+
+"Original Project" means https://github.com/milkyhack/psp-music-online
+(or any successor URL designated by the copyright holders).
+
+"Commercial Use" means any use primarily intended for or directed toward
+commercial advantage or monetary compensation, including (without limitation)
+selling the Software, selling modified versions, bundling it in a paid product,
+or providing paid hosting / paid access built primarily around this Software.
+
+==============================================================================
+2. Grant of rights (non-commercial only)
+==============================================================================
+Permission is granted, free of charge, to any person obtaining a copy of the
+Software, to use, copy, modify, merge, publish, distribute, and sublicense
+copies of the Software, subject to all conditions in this License, and ONLY
+for Non-Commercial Use.
+
+Commercial Use is prohibited without a separate written license from the
+copyright holders.
+
+==============================================================================
+3. Required attribution (always)
+==============================================================================
+Any copy, modification, fork, or distribution of the Software (source or
+binary) MUST:
+
+  (a) retain all copyright, license, and attribution notices;
+  (b) include this License text (or a clear link to it);
+  (c) state that the work is derived from "PSP Music Online" by milkyhack;
+  (d) include a clearly visible link to the Original Project:
+        https://github.com/milkyhack/psp-music-online
+
+For public forks (including GitHub/GitLab forks), the repository description,
+README, or an equivalent landing page MUST contain a prominent link to the
+Original Project (for example: "Fork of https://github.com/milkyhack/psp-music-online").
+
+==============================================================================
+4. Share-alike for modifications
+==============================================================================
+If you distribute a modified version of the Software, you MUST license your
+modifications (and the modified work as a whole) under this same License
+(PMO-NC-1.0) or a later version published by the copyright holders with the
+same Non-Commercial + Attribution + Original-link requirements.
+
+You may add your own copyright for your contributions, but you may not remove
+upstream copyright or weaken these conditions.
+
+==============================================================================
+5. No trademark rights
+==============================================================================
+This License does not grant permission to use the names, logos, or branding of
+"PSP Music Online" or milkyhack as endorsement of your fork, except as required
+for attribution in section 3.
+
+==============================================================================
+6. Third-party notice
+==============================================================================
+Sony, PlayStation, PSP, and related marks are trademarks of their respective
+owners. This project is unofficial homebrew and is not affiliated with Sony
+Interactive Entertainment.
+
+==============================================================================
+7. Warranty disclaimer
+==============================================================================
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+==============================================================================
+8. Termination
+==============================================================================
+If you violate this License, your rights under it terminate automatically.
+If you cure the violation within 30 days of becoming aware of it, your rights
+are reinstated; otherwise they remain terminated unless the copyright holders
+expressly reinstate them.
