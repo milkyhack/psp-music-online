@@ -261,6 +261,83 @@ void ui_font_icon(int x, int y, int size, int icon, u32 color) {
             }
             ui_gfx_fill(x + 3, y + s - 4, s - 6, 2, color);
             break;
+        case UI_ICON_NOTE:
+            ui_gfx_fill(cx + 2, y + 2, 2, s - 6, color);
+            ui_gfx_circle_fill(cx - 1, y + s - 5, 3, color);
+            ui_gfx_circle_fill(cx + 4, y + s - 7, 3, color);
+            ui_gfx_fill(cx + 2, y + 2, 5, 2, color);
+            break;
+        case UI_ICON_GLOBE:
+            ui_gfx_ring(cx, cy, s / 2 - 2, 2, color);
+            ui_gfx_fill(cx - s / 2 + 3, cy - 1, s - 6, 2, color);
+            ui_gfx_fill(cx - 1, cy - s / 2 + 3, 2, s - 6, color);
+            break;
+        case UI_ICON_STAR: {
+            /* Simple 5-point star as diamond + cross */
+            ui_gfx_fill(cx - 1, y + 2, 2, s - 4, color);
+            ui_gfx_fill(x + 2, cy - 1, s - 4, 2, color);
+            ui_gfx_line(x + 3, y + 4, x + s - 4, y + s - 5, color);
+            ui_gfx_line(x + s - 4, y + 4, x + 3, y + s - 5, color);
+            break;
+        }
+        case UI_ICON_WIFI:
+            ui_gfx_ring(cx, cy + 2, s / 2 - 1, 2, color);
+            ui_gfx_ring(cx, cy + 3, s / 3, 2, color);
+            ui_gfx_circle_fill(cx, cy + s / 2 - 3, 2, color);
+            break;
+        case UI_ICON_NET:
+            ui_gfx_circle_fill(cx, cy, 2, color);
+            ui_gfx_circle_fill(x + 3, y + 3, 2, color);
+            ui_gfx_circle_fill(x + s - 4, y + 3, 2, color);
+            ui_gfx_circle_fill(x + 3, y + s - 4, 2, color);
+            ui_gfx_line(cx, cy, x + 3, y + 3, color);
+            ui_gfx_line(cx, cy, x + s - 4, y + 3, color);
+            ui_gfx_line(cx, cy, x + 3, y + s - 4, color);
+            break;
+        case UI_ICON_BRUSH:
+            ui_gfx_fill(cx - 1, y + 2, 2, s / 2, color);
+            ui_gfx_fill(x + 3, y + s / 2, s - 6, 3, color);
+            ui_gfx_fill(x + 4, y + s / 2 + 3, s - 8, s / 3, color);
+            break;
+        case UI_ICON_USER:
+            ui_gfx_circle_fill(cx, cy - 2, 3, color);
+            ui_gfx_fill(cx - 4, cy + 2, 8, 5, color);
+            break;
+        case UI_ICON_DISC:
+            ui_gfx_ring(cx, cy, s / 2 - 2, 2, color);
+            ui_gfx_circle_fill(cx, cy, 2, color);
+            break;
+        case UI_ICON_SPEAKER:
+            ui_gfx_fill(x + 2, cy - 3, 4, 6, color);
+            {
+                int i;
+                for (i = 0; i < 5; i++) {
+                    ui_gfx_fill(x + 6 + i / 2, cy - i - 1, 1, i * 2 + 3, color);
+                }
+            }
+            break;
+        case UI_ICON_BATTERY:
+            ui_gfx_hairline_rect(x + 2, y + 4, s - 6, s - 8, color, 255);
+            ui_gfx_fill(x + s - 4, cy - 2, 2, 4, color);
+            ui_gfx_fill(x + 4, y + 6, s - 10, s - 12, color);
+            break;
+        case UI_ICON_BTN_X:
+            ui_gfx_ring(cx, cy, s / 2 - 1, 2, color);
+            ui_gfx_line(cx - 3, cy - 3, cx + 3, cy + 3, color);
+            ui_gfx_line(cx + 3, cy - 3, cx - 3, cy + 3, color);
+            break;
+        case UI_ICON_BTN_O:
+            ui_gfx_ring(cx, cy, s / 2 - 1, 2, color);
+            ui_gfx_ring(cx, cy, s / 2 - 4, 2, color);
+            break;
+        case UI_ICON_GEAR:
+            ui_gfx_ring(cx, cy, s / 2 - 3, 2, color);
+            ui_gfx_circle_fill(cx, cy, 2, color);
+            ui_gfx_fill(cx - 1, y + 2, 2, 3, color);
+            ui_gfx_fill(cx - 1, y + s - 5, 2, 3, color);
+            ui_gfx_fill(x + 2, cy - 1, 3, 2, color);
+            ui_gfx_fill(x + s - 5, cy - 1, 3, 2, color);
+            break;
         default:
             break;
     }

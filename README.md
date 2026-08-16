@@ -32,7 +32,7 @@ LAN only. Same Wi‑Fi. No cloud.
 - **Browse & search** — artists, albums, tracks
 - **Offline download** — save tracks to the Memory Stick, play without Wi‑Fi
 - **Music Updater** — separate XMB icon: install if missing, update if old, or say you already have the latest
-- **Themes / skins** — change the look in Appearance
+- **Themes / skins** — **Neon Terminal** (default, matches README gallery) plus Midnight and more in Appearance
 - **Admin UI** — `http://IP:8084/` for scan, cache, and diagnostics
 
 ### Screenshots
@@ -256,7 +256,7 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 - **Просмотр и поиск** — артисты, альбомы, треки
 - **Офлайн** — скачивание на Memory Stick, затем без Wi‑Fi
 - **Music Updater** — отдельная иконка в XMB: установит, если нет / обновит, если устарело / сообщит, что версия уже актуальная
-- **Темы / скины** — внешний вид в Appearance
+- **Темы / скины** — по умолчанию **Neon Terminal** (как на скринах в README), плюс Midnight и другие в Appearance
 - **Админка** — `http://IP:8084/` для сканирования, кэша и диагностики
 
 ### Скриншоты

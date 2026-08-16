@@ -126,7 +126,16 @@ static int g_return_screen = SCREEN_TRACKS;
 static int g_home_np = -1;
 static int g_home_offline = 0;
 static int g_home_online = 1;
-static int g_home_settings = 2;
+static int g_home_top = -1;
+static int g_home_wifi = -1;
+static int g_home_setup = -1;
+static int g_home_appear = -1;
+static int g_home_more = -1;
+static int g_home_settings = 2; /* legacy alias → more/settings row */
+static int g_icons[MAX_LIST_ITEMS];
+static int g_icons_n = 0;
+static int g_appear_return = SCREEN_SETTINGS;
+static int g_setup_return = SCREEN_SETTINGS;
 #ifdef DEBUG_HUD
 static int g_need_wifi_shot = 0;
 #endif
@@ -251,6 +260,7 @@ static void bind_list_ptrs(void) {
         g_labels_ptr[i] = g_items[i].name;
         g_rights_ptr[i] = g_rights[i];
     }
+    g_icons_n = 0;
 }
 
 static void load_artists(void);
@@ -291,14 +301,17 @@ static void set_home_menu(void) {
     char hp[72];
     g_count = 0;
     g_cursor = 0;
-    g_home_np = -1;
-#define ADD(label, right) \
+    g_home_np = g_home_top = g_home_wifi = g_home_setup = g_home_appear = g_home_more = -1;
+    g_icons_n = 0;
+#define ADD(label, right, icon) \
     do { \
         clip_copy(g_items[g_count].name, MAX_NAME, label); \
         g_items[g_count].id = g_count; \
         g_items[g_count].extra = 0; \
         clip_copy(g_rights[g_count], (int)sizeof(g_rights[0]), right); \
+        g_icons[g_count] = (icon); \
         g_count++; \
+        g_icons_n = g_count; \
     } while (0)
 
     /* Jump back to the live player without re-selecting a track. */
@@ -307,10 +320,10 @@ static void set_home_menu(void) {
         const char *t = g_now_title[0] ? g_now_title : "Playing";
         snprintf(right, sizeof(right), "%.18s", t);
         g_home_np = g_count;
-        ADD("Now Playing", right);
+        ADD("Now Playing", right, UI_ICON_NOTE);
     }
 
-    /* Offline first — works without Wi-Fi */
+    /* Home layout matches README Neon Terminal mockup. */
     {
         char r[32];
         int n = offline_count();
@@ -321,15 +334,30 @@ static void set_home_menu(void) {
             snprintf(r, sizeof(r), "%d songs", n);
         }
         g_home_offline = g_count;
-        ADD("Offline Music", r);
+        ADD("Offline Music", r, UI_ICON_NOTE);
     }
     g_home_online = g_count;
-    ADD("Online Library", g_online_mode ? "ready" : (g_net_ok ? "no server" : "need WiFi"));
+    ADD("Online Library", g_online_mode ? "ready" : (g_net_ok ? "no server" : "need WiFi"), UI_ICON_GLOBE);
+
+    g_home_top = g_count;
+    ADD("Top Rated", "", UI_ICON_STAR);
+
+    g_home_wifi = g_count;
+    ADD("Connect Wi-Fi", g_net_ok ? "OK" : "Press X", UI_ICON_WIFI);
+
     format_host_port(hp, sizeof(hp));
-    g_home_settings = g_count;
-    ADD("Settings", hp);
+    g_home_setup = g_count;
+    ADD("Setup IP/Port", hp, UI_ICON_NET);
+
+    g_home_appear = g_count;
+    ADD("Appearance", "skins", UI_ICON_BRUSH);
+
+    g_home_more = g_count;
+    g_home_settings = g_home_more;
+    ADD("More", "API · diag", UI_ICON_GEAR);
 #undef ADD
     bind_list_ptrs();
+    g_icons_n = g_count;
 }
 
 static void set_settings_menu(void) {
@@ -1205,15 +1233,17 @@ static void draw_current_library(void) {
             }
         }
     }
-    ui_draw_library(
+    ui_draw_library_ex(
         screen_title_with_page(),
         g_labels_ptr,
         g_rights_ptr,
+        (g_screen == SCREEN_HOME && g_icons_n > 0) ? g_icons : NULL,
         id_ptr,
         g_count,
         g_cursor,
         player_is_active(),
-        (mini.now_title && mini.now_title[0]) ? &mini : NULL
+        (mini.now_title && mini.now_title[0]) ? &mini : NULL,
+        g_screen == SCREEN_HOME
     );
 }
 
@@ -3120,22 +3150,18 @@ int main(int argc, char *argv[]) {
             }
             if (pressed & PSP_CTRL_CIRCLE) {
                 skin_set_preview(skin_get_id());
-                set_settings_menu();
-                g_screen = SCREEN_SETTINGS;
+                if (g_appear_return == SCREEN_HOME) {
+                    set_home_menu();
+                    g_screen = SCREEN_HOME;
+                } else {
+                    set_settings_menu();
+                    g_screen = SCREEN_SETTINGS;
+                }
             }
         } else if (g_screen == SCREEN_SETUP) {
-            char line1[96];
-            char line2[72];
-            char host_view[48];
-            format_host_with_cursor(host_view, sizeof(host_view));
-            if (g_setup_focus == 0) {
-                snprintf(line1, sizeof(line1), "IP %s", host_view);
-                snprintf(line2, sizeof(line2), "L/R move  U/D +-1  []/Tri +-10");
-            } else {
-                snprintf(line1, sizeof(line1), "Port [%d]", g_cfg.port);
-                snprintf(line2, sizeof(line2), "U/D change port  SELECT=IP");
-            }
-            ui_draw_message("Setup", line1, line2, player_is_active());
+            int octets[4];
+            parse_host_octets(octets);
+            ui_draw_setup("Setup", octets, g_setup_octet, g_cfg.port, g_setup_focus, player_is_active());
 
             /* SELECT toggles IP <-> Port */
             if (pressed & PSP_CTRL_SELECT) {
@@ -3197,17 +3223,27 @@ int main(int argc, char *argv[]) {
             if (pressed & (PSP_CTRL_START | PSP_CTRL_CROSS)) {
                 save_setup_cfg();
                 g_online_mode = 0; /* force re-probe with new IP */
-                set_settings_menu();
-                g_cursor = 0;
-                g_screen = SCREEN_SETTINGS;
+                if (g_setup_return == SCREEN_HOME) {
+                    set_home_menu();
+                    g_screen = SCREEN_HOME;
+                } else {
+                    set_settings_menu();
+                    g_cursor = 0;
+                    g_screen = SCREEN_SETTINGS;
+                }
             }
             if (pressed & PSP_CTRL_CIRCLE) {
                 /* Auto-save on back — previously only START saved, so IP "didn't stick". */
                 save_setup_cfg();
                 g_online_mode = 0;
-                set_settings_menu();
-                g_cursor = 0;
-                g_screen = SCREEN_SETTINGS;
+                if (g_setup_return == SCREEN_HOME) {
+                    set_home_menu();
+                    g_screen = SCREEN_HOME;
+                } else {
+                    set_settings_menu();
+                    g_cursor = 0;
+                    g_screen = SCREEN_SETTINGS;
+                }
             }
         } else if (g_screen == SCREEN_INFO) {
             ui_draw_info(
@@ -3334,8 +3370,8 @@ int main(int argc, char *argv[]) {
                 }
             } else {
             /* Always show live host:port (Setup may have changed g_cfg). */
-            if (g_screen == SCREEN_HOME && g_home_settings >= 0 && g_home_settings < g_count) {
-                format_host_port(g_rights[g_home_settings], (int)sizeof(g_rights[0]));
+            if (g_screen == SCREEN_HOME && g_home_setup >= 0 && g_home_setup < g_count) {
+                format_host_port(g_rights[g_home_setup], (int)sizeof(g_rights[0]));
             } else if (g_screen == SCREEN_SETTINGS && g_count > 0) {
                 format_host_port(g_rights[0], (int)sizeof(g_rights[0]));
             }
@@ -3429,7 +3465,28 @@ int main(int argc, char *argv[]) {
                         } else {
                             set_home_menu();
                         }
-                    } else if (g_cursor == g_home_settings) {
+                    } else if (g_cursor == g_home_top) {
+                        set_status("Opening Wi-Fi...");
+                        if (ensure_online()) {
+                            load_top();
+                        } else {
+                            set_home_menu();
+                        }
+                    } else if (g_cursor == g_home_wifi) {
+                        set_status("Opening Wi-Fi...");
+                        try_connect();
+                        set_home_menu();
+                    } else if (g_cursor == g_home_setup) {
+                        g_setup_octet = 0;
+                        g_setup_focus = 0;
+                        g_setup_return = SCREEN_HOME;
+                        g_screen = SCREEN_SETUP;
+                    } else if (g_cursor == g_home_appear) {
+                        g_appear_skin = skin_get_id();
+                        skin_set_preview(g_appear_skin);
+                        g_appear_return = SCREEN_HOME;
+                        g_screen = SCREEN_APPEARANCE;
+                    } else if (g_cursor == g_home_more) {
                         set_settings_menu();
                         g_screen = SCREEN_SETTINGS;
                     }
@@ -3437,10 +3494,12 @@ int main(int argc, char *argv[]) {
                     if (g_cursor == 0) {
                         g_setup_octet = 0;
                         g_setup_focus = 0;
+                        g_setup_return = SCREEN_SETTINGS;
                         g_screen = SCREEN_SETUP;
                     } else if (g_cursor == 1) {
                         g_appear_skin = skin_get_id();
                         skin_set_preview(g_appear_skin);
+                        g_appear_return = SCREEN_SETTINGS;
                         g_screen = SCREEN_APPEARANCE;
                     } else if (g_cursor == 2) {
                         clip_copy(g_info_title, sizeof(g_info_title), "Controls");

@@ -16,15 +16,15 @@ static int g_prev_skin = 0;
  * Names are English. Palettes stay dark with a single accent.
  */
 static const PlayerSkin SKINS[SKIN_COUNT] = {
-    /* 0 Midnight — premium PSP device default */
-    {"Midnight",
-     UI_RGB(7, 7, 10), UI_RGB(28, 28, 36), UI_RGB(58, 58, 72), UI_RGB(14, 14, 18),
-     UI_RGB(10, 10, 14), UI_RGB(244, 244, 248), UI_RGB(138, 138, 150), UI_RGB(30, 215, 96),
-     UI_RGB(30, 215, 96), UI_RGB(244, 244, 248), UI_RGB(138, 138, 150), UI_RGB(36, 36, 48),
-     UI_RGB(30, 215, 96),
-     UI_RGB(16, 16, 24), UI_RGB(28, 28, 38), UI_RGB(12, 12, 18),
-     UI_RGB(30, 215, 96), UI_RGB(233, 70, 70),
-     VIZ_SOFT_SPEC, COMP_WINAMP, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 12, 2},
+    /* 0 Neon Terminal — 1:1 with README docs/assets mockups (#1ABC3B on pure black) */
+    {"Neon Terminal",
+     UI_RGB(0, 0, 0), UI_RGB(18, 22, 18), UI_RGB(48, 64, 48), UI_RGB(8, 10, 8),
+     UI_RGB(0, 0, 0), UI_RGB(32, 200, 68), UI_RGB(18, 90, 40), UI_RGB(32, 200, 68),
+     UI_RGB(32, 200, 68), UI_RGB(255, 255, 255), UI_RGB(136, 136, 136), UI_RGB(24, 24, 24),
+     UI_RGB(32, 200, 68),
+     UI_RGB(0, 0, 0), UI_RGB(39, 39, 39), UI_RGB(0, 0, 0),
+     UI_RGB(32, 200, 68), UI_RGB(233, 70, 70),
+     VIZ_MATRIX_RAIN, COMP_MATRIX, CHROME_NEON, PROG_BAR, CURSOR_BAR, TYPE_MONO, 4, 1},
 
     /* 1 Ocean */
     {"Ocean",
@@ -96,15 +96,15 @@ static const PlayerSkin SKINS[SKIN_COUNT] = {
      UI_RGB(140, 210, 255), UI_RGB(233, 70, 70),
      VIZ_CRT_SCAN, COMP_CRT, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 10, 2},
 
-    /* 8 Neon */
-    {"Neon",
-     UI_RGB(4, 6, 8), UI_RGB(18, 28, 24), UI_RGB(30, 50, 40), UI_RGB(8, 12, 10),
-     UI_RGB(6, 8, 8), UI_RGB(230, 255, 240), UI_RGB(80, 140, 110), UI_RGB(0, 255, 160),
-     UI_RGB(0, 255, 160), UI_RGB(230, 255, 240), UI_RGB(120, 190, 150), UI_RGB(20, 32, 26),
-     UI_RGB(0, 255, 160),
-     UI_RGB(10, 16, 12), UI_RGB(22, 36, 28), UI_RGB(4, 6, 8),
-     UI_RGB(0, 255, 160), UI_RGB(255, 60, 120),
-     VIZ_CYBER_GRID, COMP_CYBER, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 10, 2},
+    /* 8 Midnight — former default (Spotify-green premium) */
+    {"Midnight",
+     UI_RGB(7, 7, 10), UI_RGB(28, 28, 36), UI_RGB(58, 58, 72), UI_RGB(14, 14, 18),
+     UI_RGB(10, 10, 14), UI_RGB(244, 244, 248), UI_RGB(138, 138, 150), UI_RGB(30, 215, 96),
+     UI_RGB(30, 215, 96), UI_RGB(244, 244, 248), UI_RGB(138, 138, 150), UI_RGB(36, 36, 48),
+     UI_RGB(30, 215, 96),
+     UI_RGB(16, 16, 24), UI_RGB(28, 28, 38), UI_RGB(12, 12, 18),
+     UI_RGB(30, 215, 96), UI_RGB(233, 70, 70),
+     VIZ_SOFT_SPEC, COMP_WINAMP, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 12, 2},
 
     /* 9 Graphite */
     {"Graphite",

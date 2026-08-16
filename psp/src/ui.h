@@ -124,8 +124,31 @@ void ui_draw_library(
     int playing,
     const UiMiniPlayer *mini
 );
+/* Same as ui_draw_library, plus optional per-row icons (UI_ICON_* or UI_ICON_NONE). */
+void ui_draw_library_ex(
+    const char *title,
+    const char **labels,
+    const char **rights,
+    const int *icons,
+    const int *track_ids,
+    int count,
+    int cursor,
+    int playing,
+    const UiMiniPlayer *mini,
+    int show_footer
+);
 void ui_draw_now_playing(const UiNowPlaying *np);
 void ui_draw_message(const char *title, const char *line1, const char *line2, int playing);
+/* Neon Terminal / Setup: coloured octets + footer hints. */
+void ui_draw_setup(
+    const char *title,
+    const int octets[4],
+    int selected_octet,
+    int port,
+    int focus_port,
+    int playing
+);
+void ui_draw_footer_hints(const char *x_label, const char *o_label);
 
 /* Up to 4 body lines + footer hint (info screens). */
 void ui_draw_info(

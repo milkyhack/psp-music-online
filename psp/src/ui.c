@@ -29,6 +29,9 @@ static char g_dbg2[96];
 #endif
 static int g_loading;
 
+static void ui_font_text_marquee(int x, int y, int max_w, u32 color, const char *s, int size);
+static int skin_is_neon(const PlayerTheme *th);
+
 static const int EQ_FLAT[11] = {12,12,12,12,12,12,12,12,12,12,12};
 static const int EQ_BASS[11] = {20,18,14,10,10,10,10,10,10,10,10};
 static const int EQ_ROCK[11] = {18,16,10,8,12,14,16,18,18,16,14};
@@ -322,11 +325,23 @@ static void viz_draw(int x, int y, int w, int h, int playing, const PlayerTheme 
 static void np_draw_progress(int x, int y, int w, int h, int elapsed_ms, int duration_ms, const PlayerTheme *th) {
     int seek_w = 0;
     int knob;
+    int neon = skin_is_neon(th);
     (void)h;
     if (duration_ms > 0) {
         seek_w = (int)(((long)w * elapsed_ms) / duration_ms);
         if (seek_w < 0) seek_w = 0;
         if (seek_w > w) seek_w = w;
+    }
+    if (neon) {
+        ui_gfx_fill(x, y + 1, w, 3, th->chrome_lo);
+        if (seek_w > 0) {
+            ui_gfx_fill(x, y + 1, seek_w, 3, th->accent);
+        }
+        knob = x + seek_w;
+        if (knob < x) knob = x;
+        if (knob > x + w) knob = x + w;
+        ui_gfx_circle_fill(knob, y + 2, 5, th->accent);
+        return;
     }
     /* Inset track with hairline — feels like device chrome, not a flat CSS bar. */
     ui_gfx_round_fill(x, y, w, 5, 2, th->chrome_lo);
@@ -346,6 +361,17 @@ static void np_draw_progress(int x, int y, int w, int h, int elapsed_ms, int dur
 static void np_soft_icon(int cx, int cy, int r, int icon, int lit, const PlayerTheme *th) {
     int atlas_region = UI_ATLAS_ICON_PLAY;
     int iw = (r >= 24) ? 30 : 20;
+    int neon = skin_is_neon(th);
+    if (neon) {
+        if (lit) {
+            ui_gfx_ring(cx, cy, r, 3, th->accent);
+            ui_font_icon(cx - 10, cy - 10, 20, icon, th->accent);
+        } else {
+            ui_gfx_ring(cx, cy, r, 2, th->chrome_hi);
+            ui_font_icon(cx - 8, cy - 8, 16, icon, th->text);
+        }
+        return;
+    }
     if (lit) {
         /* Hero play — bloom + solid accent disc + dark glyph */
         ui_gfx_bloom(cx, cy, r + 10, th->accent, 45);
@@ -767,18 +793,35 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
 
     /* Atmosphere */
     ui_clear(th->bg);
-    ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
-    ui_gfx_fill_alpha(0, 0, UI_SCREEN_W, 1, th->chrome_hi, 60);
-    ui_gfx_fill_alpha(0, 1, UI_SCREEN_W, 1, th->accent, 35);
+    if (skin_is_neon(th)) {
+        ui_gfx_fill(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->bg);
+        ui_font_icon(12, 8, 14, UI_ICON_NOTE, th->text);
+        ui_font_text(30, 10, th->text, "Now Playing", UI_FONT_MD);
+        ui_font_icon(400, 8, 14, UI_ICON_SPEAKER, th->muted);
+        ui_font_icon(424, 8, 14, UI_ICON_BATTERY, th->accent);
+    } else {
+        ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+        ui_gfx_fill_alpha(0, 0, UI_SCREEN_W, 1, th->chrome_hi, 60);
+        ui_gfx_fill_alpha(0, 1, UI_SCREEN_W, 1, th->accent, 35);
+    }
 
     np_draw_cover_hero(np, th);
 
     /* Right column: title → artist → album → mode pills (no time/format here) */
     ui_font_text_marquee(196, 24, 268, th->text, title, UI_FONT_LG);
     artist_col = ui_gfx_lerp(th->text, th->muted, 90);
-    ui_font_text_clip(196, 50, 268, artist_col, artist, UI_FONT_MD);
-    if (album[0]) {
-        ui_font_text_clip(196, 72, 200, th->muted, album, UI_FONT_SM);
+    if (skin_is_neon(th)) {
+        ui_font_icon(196, 48, 12, UI_ICON_USER, th->muted);
+        ui_font_text_clip(214, 50, 250, artist_col, artist, UI_FONT_MD);
+        if (album[0]) {
+            ui_font_icon(196, 70, 12, UI_ICON_DISC, th->muted);
+            ui_font_text_clip(214, 72, 200, th->muted, album, UI_FONT_SM);
+        }
+    } else {
+        ui_font_text_clip(196, 50, 268, artist_col, artist, UI_FONT_MD);
+        if (album[0]) {
+            ui_font_text_clip(196, 72, 200, th->muted, album, UI_FONT_SM);
+        }
     }
     if (np->rating > 0) {
         char stars[8];
@@ -880,8 +923,36 @@ static void ui_font_text_marquee(int x, int y, int max_w, u32 color, const char 
     ui_font_text_clip(x, y, max_w, color, s + skip, size);
 }
 
+static int skin_is_neon(const PlayerTheme *th) {
+    return th && th->chrome_style == CHROME_NEON;
+}
+
+void ui_draw_footer_hints(const char *x_label, const char *o_label) {
+    const PlayerTheme *th = theme_active();
+    int y = UI_SCREEN_H - 22;
+    u32 line = skin_is_neon(th) ? th->accent : th->chrome_lo;
+    ui_gfx_fill(0, y - 4, UI_SCREEN_W, 1, line);
+    if (skin_is_neon(th)) {
+        ui_gfx_fill_alpha(0, y - 4, UI_SCREEN_W, 1, th->accent, 180);
+    }
+    ui_font_icon(16, y - 1, 14, UI_ICON_BTN_X, th->text);
+    ui_font_text(34, y + 1, th->text, x_label ? x_label : "Select", UI_FONT_SM);
+    ui_font_icon(UI_SCREEN_W - 90, y - 1, 14, UI_ICON_BTN_O, th->text);
+    ui_font_text(UI_SCREEN_W - 72, y + 1, th->text, o_label ? o_label : "Back", UI_FONT_SM);
+}
+
 void ui_draw_header(const char *title, int playing) {
     const PlayerTheme *th = theme_active();
+    int neon = skin_is_neon(th);
+    if (neon) {
+        ui_gfx_fill(0, 0, UI_SCREEN_W, 36, th->bg);
+        ui_font_text_clip(16, 8, UI_SCREEN_W - 80, th->text, title ? title : "Music", UI_FONT_LG);
+        ui_gfx_fill(0, 34, UI_SCREEN_W, 2, th->accent);
+        if (playing) {
+            ui_gfx_circle_fill(456, 18, 4, th->accent);
+        }
+        return;
+    }
     ui_gfx_fill(0, 0, UI_SCREEN_W, 40, th->panel);
     ui_gfx_fill_alpha(0, 0, UI_SCREEN_W, 1, th->chrome_hi, 90);
     ui_gfx_fill(0, 39, UI_SCREEN_W, 1, th->chrome_lo);
@@ -908,7 +979,7 @@ void ui_draw_list(
     int cursor,
     int playing
 ) {
-    ui_draw_library(title, labels, rights, NULL, count, cursor, playing, NULL);
+    ui_draw_library_ex(title, labels, rights, NULL, NULL, count, cursor, playing, NULL, 0);
 }
 
 static void ui_draw_mini_player(const UiMiniPlayer *mini, const PlayerTheme *th) {
@@ -919,6 +990,7 @@ static void ui_draw_mini_player(const UiMiniPlayer *mini, const PlayerTheme *th)
     char artist[96];
     int i;
     int seek_w = 0;
+    int neon = skin_is_neon(th);
 
     if (!mini || !mini->now_title || !mini->now_title[0]) {
         return;
@@ -936,6 +1008,25 @@ static void ui_draw_mini_player(const UiMiniPlayer *mini, const PlayerTheme *th)
         }
         artist[i] = '\0';
     }
+
+    if (neon) {
+        ui_gfx_fill(0, y, UI_SCREEN_W, 48, th->header);
+        ui_gfx_fill(0, y, 4, 48, th->accent);
+        cover = ui_image_cover_for(mini->track_id);
+        ui_gfx_fill(12, y + 8, 32, 32, th->chrome_lo);
+        if (cover && cover->ready) {
+            ui_image_draw_cover(12, y + 8, 32, 32, cover);
+        } else {
+            ui_gpu_blit_atlas_cpu(g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, 12, y + 8, 32, 32, 0xFFFFFFFFu);
+        }
+        ui_font_text_clip(54, y + 10, 300, th->text, title, UI_FONT_MD);
+        ui_font_text_clip(54, y + 28, 280, th->muted, artist, UI_FONT_SM);
+        /* Outline play circle like library mockup */
+        ui_gfx_ring(452, y + 24, 14, 2, th->accent);
+        ui_font_icon(444, y + 16, 16, mini->paused ? UI_ICON_PLAY : UI_ICON_PAUSE, th->accent);
+        return;
+    }
+
     ui_gfx_glass(0, y, UI_SCREEN_W, 48, 0, th->header, th->chrome_hi, 235);
     ui_gfx_fill_alpha(0, y, UI_SCREEN_W, 1, th->accent, 160);
     cover = ui_image_cover_for(mini->track_id);
@@ -985,19 +1076,45 @@ void ui_draw_library(
     int playing,
     const UiMiniPlayer *mini
 ) {
+    ui_draw_library_ex(title, labels, rights, NULL, track_ids, count, cursor, playing, mini, 0);
+}
+
+void ui_draw_library_ex(
+    const char *title,
+    const char **labels,
+    const char **rights,
+    const int *icons,
+    const int *track_ids,
+    int count,
+    int cursor,
+    int playing,
+    const UiMiniPlayer *mini,
+    int show_footer
+) {
     const PlayerTheme *th = theme_active();
     int i;
-    int row_h = 32;
-    int top = 40;
-    int footer_h = mini && mini->now_title && mini->now_title[0] ? 48 : 0;
-    int visible = (UI_SCREEN_H - top - footer_h) / row_h;
+    int neon = skin_is_neon(th);
+    int row_h = neon ? 34 : 32;
+    int top = neon ? 42 : 40;
+    int footer_h = 0;
+    int visible;
     int start = 0;
     int show_thumbs = (track_ids != NULL);
+    int has_icons = (icons != NULL);
+
+    if (mini && mini->now_title && mini->now_title[0]) {
+        footer_h = 48;
+    } else if (show_footer && neon) {
+        footer_h = 26;
+    }
 
     ui_clear(th->bg);
-    ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+    if (!neon) {
+        ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+    }
     ui_draw_header(title, playing);
 
+    visible = (UI_SCREEN_H - top - footer_h) / row_h;
     if (visible < 1) visible = 1;
     if (cursor >= start + visible) start = cursor - visible + 1;
     if (cursor < start) start = cursor;
@@ -1006,22 +1123,33 @@ void ui_draw_library(
     for (i = 0; i < visible; i++) {
         int idx = start + i;
         int y = top + i * row_h;
-        int text_x = show_thumbs ? 56 : 28;
+        int text_x = show_thumbs ? 56 : (has_icons ? 44 : 28);
         char label[96];
         int n = 0;
+        u32 rights_col;
         if (idx >= count) break;
         if (idx == cursor) {
-            /* Strong focus — solid card + accent rail (always readable on PSP). */
-            ui_gfx_round_fill(6, y + 1, UI_SCREEN_W - 12, row_h - 2, 6, th->card);
-            ui_gfx_fill(6, y + 3, 4, row_h - 6, th->accent);
-            ui_gfx_fill_alpha(10, y + 3, 8, row_h - 6, th->accent, 55);
-            ui_gfx_hairline_rect(6, y + 1, UI_SCREEN_W - 12, row_h - 2, th->chrome_hi, 70);
-        } else {
+            if (neon) {
+                /* Flush-left gray bar + neon rail like home.png */
+                ui_gfx_fill(0, y, UI_SCREEN_W, row_h, th->card);
+                ui_gfx_fill(0, y, 4, row_h, th->accent);
+            } else {
+                ui_gfx_round_fill(6, y + 1, UI_SCREEN_W - 12, row_h - 2, 6, th->card);
+                ui_gfx_fill(6, y + 3, 4, row_h - 6, th->accent);
+                ui_gfx_fill_alpha(10, y + 3, 8, row_h - 6, th->accent, 55);
+                ui_gfx_hairline_rect(6, y + 1, UI_SCREEN_W - 12, row_h - 2, th->chrome_hi, 70);
+            }
+        } else if (!neon) {
             ui_gfx_fill_alpha(28, y + row_h - 1, UI_SCREEN_W - 56, 1, th->chrome_lo, 110);
+        } else {
+            ui_gfx_fill_alpha(16, y + row_h - 1, UI_SCREEN_W - 32, 1, th->chrome_lo, 80);
+        }
+        if (has_icons && icons[idx] >= 0) {
+            ui_font_icon(14, y + (row_h - 16) / 2, 16, icons[idx], th->accent);
         }
         if (show_thumbs) {
             const UiCover *c = ui_image_cover_for(track_ids[idx]);
-            ui_gfx_round_fill(22, y + 4, 24, 24, 5, th->chrome_lo);
+            ui_gfx_round_fill(22, y + 4, 24, 24, neon ? 2 : 5, th->chrome_lo);
             if (c && c->ready) {
                 ui_image_draw_cover(23, y + 5, 22, 22, c);
             } else {
@@ -1036,21 +1164,23 @@ void ui_draw_library(
             }
         }
         label[n] = '\0';
-        /* Rights column must fit "192.168.31.193:8084" (~21 chars × 8px). */
         if (idx == cursor) {
             ui_font_text_marquee(text_x, y + 8, UI_SCREEN_W - text_x - 176,
                           th->text, label, UI_FONT_MD);
         } else {
             ui_font_text_clip(text_x, y + 8, UI_SCREEN_W - text_x - 176,
-                          th->muted, label, UI_FONT_MD);
+                          neon ? th->text : th->muted, label, UI_FONT_MD);
         }
         if (rights && rights[idx] && rights[idx][0]) {
-            ui_font_text_clip(UI_SCREEN_W - 176, y + 9, 168, th->muted, rights[idx], UI_FONT_SM);
+            rights_col = (neon || idx == cursor) ? th->accent : th->muted;
+            ui_font_text_clip(UI_SCREEN_W - 176, y + 9, 168, rights_col, rights[idx], UI_FONT_SM);
         }
     }
 
     if (mini && mini->now_title && mini->now_title[0]) {
         ui_draw_mini_player(mini, th);
+    } else if (show_footer && neon) {
+        ui_draw_footer_hints("Select", "Back");
     }
 }
 
@@ -1145,8 +1275,20 @@ void ui_draw_appearance(
 void ui_draw_message(const char *title, const char *line1, const char *line2, int playing) {
     const PlayerTheme *th = theme_active();
     ui_clear(th->bg);
-    ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+    if (!skin_is_neon(th)) {
+        ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+    }
     ui_draw_header(title, playing);
+    if (skin_is_neon(th)) {
+        if (line1) {
+            ui_font_text_clip(24, 100, UI_SCREEN_W - 48, th->text, line1, UI_FONT_MD);
+        }
+        if (line2) {
+            ui_font_text_clip(24, 132, UI_SCREEN_W - 48, th->muted, line2, UI_FONT_SM);
+        }
+        ui_draw_footer_hints("Back", "OK");
+        return;
+    }
     ui_gfx_glass(24, 72, UI_SCREEN_W - 48, 128, 10, th->panel, th->chrome_hi, 235);
     ui_gfx_fill(24, 80, 4, 112, th->accent);
     if (line1) {
@@ -1155,6 +1297,56 @@ void ui_draw_message(const char *title, const char *line1, const char *line2, in
     if (line2) {
         ui_font_text_clip(44, 132, UI_SCREEN_W - 90, th->muted, line2, UI_FONT_SM);
     }
+}
+
+void ui_draw_setup(
+    const char *title,
+    const int octets[4],
+    int selected_octet,
+    int port,
+    int focus_port,
+    int playing
+) {
+    const PlayerTheme *th = theme_active();
+    char part[16];
+    int i;
+    int x;
+    int w;
+
+    ui_clear(th->bg);
+    ui_draw_header(title ? title : "Setup", playing);
+
+    ui_font_text(UI_SCREEN_W / 2 - 40, 70, th->text, "IP Address", UI_FONT_SM);
+
+    x = 40;
+    for (i = 0; i < 4; i++) {
+        if (!focus_port && i == selected_octet) {
+            snprintf(part, sizeof(part), "[%d]", octets[i] & 255);
+            w = ui_font_text_w(part, UI_FONT_LG);
+            ui_font_text(x, 100, th->accent, part, UI_FONT_LG);
+        } else {
+            snprintf(part, sizeof(part), "%d", octets[i] & 255);
+            w = ui_font_text_w(part, UI_FONT_LG);
+            ui_font_text(x, 100, th->text, part, UI_FONT_LG);
+        }
+        x += w + 4;
+        if (i < 3) {
+            ui_font_text(x, 100, th->muted, ".", UI_FONT_LG);
+            x += ui_font_text_w(".", UI_FONT_LG) + 4;
+        }
+    }
+
+    ui_font_text(UI_SCREEN_W / 2 - 16, 150, th->text, "Port", UI_FONT_SM);
+    if (focus_port) {
+        snprintf(part, sizeof(part), "[%d]", port);
+        ui_font_text(UI_SCREEN_W / 2 - ui_font_text_w(part, UI_FONT_LG) / 2, 172, th->accent, part, UI_FONT_LG);
+    } else {
+        snprintf(part, sizeof(part), "%d", port);
+        ui_font_text(UI_SCREEN_W / 2 - ui_font_text_w(part, UI_FONT_LG) / 2, 172, th->text, part, UI_FONT_LG);
+    }
+
+    ui_font_text(UI_SCREEN_W / 2 - 70, 210, th->muted, "L/R move  U/D +-1", UI_FONT_SM);
+    ui_draw_footer_hints("Back", "Save");
 }
 
 void ui_draw_info(

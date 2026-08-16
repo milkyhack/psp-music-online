@@ -20,7 +20,7 @@ void ui_font_text(int x, int y, u32 color, const char *s, int size);
 void ui_font_text_clip(int x, int y, int max_w, u32 color, const char *s, int size);
 void ui_font_text_shadow(int x, int y, u32 color, u32 shadow, const char *s, int size);
 
-/* Soft vector-like transport icons (not 1-bit sprites). */
+/* Soft vector-like icons (transport + Neon Terminal menu glyphs). */
 enum {
     UI_ICON_PREV = 0,
     UI_ICON_PLAY,
@@ -31,8 +31,22 @@ enum {
     UI_ICON_SHUF,
     UI_ICON_RPT,
     UI_ICON_DL,
+    UI_ICON_NOTE,
+    UI_ICON_GLOBE,
+    UI_ICON_STAR,
+    UI_ICON_WIFI,
+    UI_ICON_NET,
+    UI_ICON_BRUSH,
+    UI_ICON_USER,
+    UI_ICON_DISC,
+    UI_ICON_SPEAKER,
+    UI_ICON_BATTERY,
+    UI_ICON_BTN_X,
+    UI_ICON_BTN_O,
+    UI_ICON_GEAR,
     UI_ICON_COUNT
 };
+#define UI_ICON_NONE (-1)
 
 void ui_font_icon(int x, int y, int size, int icon, u32 color);
 
