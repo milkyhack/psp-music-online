@@ -1,14 +1,10 @@
 #ifdef DEBUG_HUD
 
 #include "debug_log.h"
-#include "paths.h"
-#include "updater.h"
 
 #include <pspkernel.h>
-#include <pspiofilemgr.h>
 #include <stdio.h>
 #include <string.h>
-#include <stdlib.h>
 
 #define DBG_RING 48
 #define DBG_STEP_LEN 80
@@ -33,7 +29,6 @@ static char g_ring_step[DBG_RING][DBG_STEP_LEN];
 static volatile int g_ring_w = 0;
 static volatile int g_ring_r = 0;
 static char g_last_step[DBG_STEP_LEN] = "-";
-static char g_session[24];
 
 static void dbg_lock_init(void) {
     if (g_dbg_mtx < 0) {
@@ -52,13 +47,6 @@ static void dbg_unlock(void) {
     if (g_dbg_mtx >= 0) {
         sceKernelSignalSema(g_dbg_mtx, 1);
     }
-}
-
-static void ensure_session(void) {
-    if (g_session[0]) {
-        return;
-    }
-    snprintf(g_session, sizeof(g_session), "psp-%u", (unsigned)sceKernelGetSystemTimeLow());
 }
 
 static void copy_trunc(char *dst, int dst_sz, const char *src) {
@@ -83,7 +71,6 @@ void dbg_log(const char *hypothesisId, const char *location, const char *message
     int pending;
 
     dbg_lock();
-    ensure_session();
     pending = g_ev_w - g_ev_r;
     if (pending >= DBG_RING) {
         g_ev_r = g_ev_w - DBG_RING + 1;
@@ -97,32 +84,6 @@ void dbg_log(const char *hypothesisId, const char *location, const char *message
     e->ts = (unsigned)sceKernelGetSystemTimeLow();
     g_ev_w++;
     dbg_unlock();
-
-    {
-        char line[512];
-        char path[300];
-        int n;
-        SceUID fd;
-        n = snprintf(
-            line,
-            sizeof(line),
-            "{\"sessionId\":\"%s\",\"hypothesisId\":\"%s\",\"location\":\"%s\",\"message\":\"%s\",\"data\":%s,\"timestamp\":%u}\n",
-            g_session,
-            e->hyp,
-            e->loc,
-            e->msg,
-            e->data[0] ? e->data : "{}",
-            e->ts
-        );
-        if (n > 0) {
-            paths_join(path, sizeof(path), "debug.log");
-            fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, 0777);
-            if (fd >= 0) {
-                sceIoWrite(fd, line, (unsigned)strlen(line));
-                sceIoClose(fd);
-            }
-        }
-    }
 }
 
 void dbg_step(const char *step) {

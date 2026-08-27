@@ -16,6 +16,5 @@ int config_save(const ServerConfig *cfg);
 
 /* Resolved at runtime via paths_join — not hardcoded GAME/PSPMUSIC */
 void config_path(char *out, int out_sz);
-void cache_mp3_path(char *out, int out_sz);
 
 #endif

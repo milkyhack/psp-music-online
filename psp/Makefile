@@ -5,7 +5,7 @@ OBJS = src/main.o src/net.o src/http.o src/jutil.o src/config.o src/player.o \
 	assets/ui/atlas.o assets/ui/font.o assets/ui/labels.o
 
 INCDIR = src
-# Release build: no DEBUG_HUD (no overlay, no debug.log). Use make DEBUG_HUD=1 for QA.
+# Release build: no DEBUG_HUD (no overlay). Use make DEBUG_HUD=1 for QA HUD (RAM only).
 CFLAGS = -O2 -G0 -Wall -Wextra
 ifdef DEBUG_HUD
     CFLAGS += -DDEBUG_HUD
@@ -25,8 +25,8 @@ LIBS = \
 	-lFLAC -logg -lm
 
 EXTRA_TARGETS = EBOOT.PBP
-APP_VER = 1.3.12
-APP_VER_CODE = 162
+APP_VER = 1.3.14
+APP_VER_CODE = 164
 # XMB «Версия» = DISC_VERSION in Sony format X.YZ (e.g. 1.39), not semver.
 DISC_VER = $(shell printf '%d.%02d' $$(($(APP_VER_CODE)/100)) $$(($(APP_VER_CODE)%100)))
 PSP_EBOOT_TITLE = PSP Music $(APP_VER)

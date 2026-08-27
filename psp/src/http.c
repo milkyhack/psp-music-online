@@ -1,8 +1,8 @@
 #include "http.h"
 #include "debug_log.h"
+#include "storage.h"
 
 #include <pspkernel.h>
-#include <pspiofilemgr.h>
 #include <pspnet.h>
 #include <pspnet_inet.h>
 #include <pspnet_apctl.h>
@@ -25,6 +25,10 @@ static volatile int g_http_abort = 0;
 static volatile int g_http_sock = -1;
 static char g_http_fail[24] = "";
 static char g_api_key[64] = "";
+
+static int forbidden_stick_cache(const char *filepath) {
+    return filepath && strstr(filepath, "cache.mp3") != NULL;
+}
 
 void http_set_api_key(const char *key) {
     if (!key) {
@@ -406,9 +410,13 @@ int http_get_file_ex(
     int content_length = -1;
     int written = 0;
     int complete;
-    SceUID fd = -1;
 
     g_http_fail[0] = '\0';
+    if (forbidden_stick_cache(filepath)) {
+        http_set_fail("file");
+        dbg_step("err_file");
+        return HTTP_ERR;
+    }
     if (out_content_length) {
         *out_content_length = -1;
     }
@@ -536,71 +544,84 @@ int http_get_file_ex(
         leftover = hlen - header_bytes;
         dbg_step("hdr_ok");
 
-        fd = sceIoOpen(filepath, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-        if (fd < 0) {
-            {
+        {
+            StorageWriter wr;
+            if (storage_writer_open(&wr, filepath, 0) < 0) {
                 char d[160];
-                char step[48];
                 snprintf(
                     d,
                     sizeof(d),
-                    "{\"fd\":%d,\"path\":\"%.96s\"}",
-                    fd,
+                    "{\"path\":\"%.96s\"}",
                     filepath ? filepath : "?"
                 );
                 dbg_log("B", "http.c:get_file", "open_fail", d);
-                snprintf(step, sizeof(step), "err_file_%d", fd);
-                dbg_step(step);
+                dbg_step("err_file");
+                sock_close(sock);
+                http_set_fail("file");
+                return HTTP_ERR;
             }
-            sock_close(sock);
-            http_set_fail("file");
-            return HTTP_ERR;
-        }
-        if (leftover > 0) {
-            sceIoWrite(fd, sep + 4, leftover);
-            written += leftover;
-            if (progress) {
-                progress(written, content_length, userdata);
-            }
-        }
-
-        dbg_step("body");
-        {
-            char chunk[4096];
-            for (;;) {
-                int r;
-                if (g_http_abort) {
-                    /* Finish only if we already have the full file. */
-                    break;
-                }
-                /* Body: blocking recv; abort checked between chunks. */
-                r = sock_recv(sock, chunk, sizeof(chunk));
-                if (r < 0) {
-                    if (g_http_abort) {
-                        break;
-                    }
-                    sceIoClose(fd);
+            if (leftover > 0) {
+                if (storage_writer_write(&wr, sep + 4, leftover) < 0) {
+                    storage_writer_close(&wr);
                     sock_close(sock);
-                    http_set_fail("recv");
-                    dbg_step("err_recv");
+                    http_set_fail("file");
+                    dbg_step("err_file");
                     return HTTP_ERR;
                 }
-                if (r == 0) {
-                    break; /* EOF */
-                }
-                sceIoWrite(fd, chunk, r);
-                written += r;
+                written += leftover;
                 if (progress) {
                     progress(written, content_length, userdata);
                 }
-                if (content_length > 0 && written >= content_length) {
-                    break;
+            }
+
+            dbg_step("body");
+            {
+                char chunk[4096];
+                for (;;) {
+                    int r;
+                    if (g_http_abort) {
+                        /* Finish only if we already have the full file. */
+                        break;
+                    }
+                    /* Body: blocking recv; abort checked between chunks. */
+                    r = sock_recv(sock, chunk, sizeof(chunk));
+                    if (r < 0) {
+                        if (g_http_abort) {
+                            break;
+                        }
+                        storage_writer_close(&wr);
+                        sock_close(sock);
+                        http_set_fail("recv");
+                        dbg_step("err_recv");
+                        return HTTP_ERR;
+                    }
+                    if (r == 0) {
+                        break; /* EOF */
+                    }
+                    if (storage_writer_write(&wr, chunk, r) < 0) {
+                        storage_writer_close(&wr);
+                        sock_close(sock);
+                        http_set_fail("file");
+                        dbg_step("err_file");
+                        return HTTP_ERR;
+                    }
+                    written += r;
+                    if (progress) {
+                        progress(written, content_length, userdata);
+                    }
+                    if (content_length > 0 && written >= content_length) {
+                        break;
+                    }
                 }
             }
-        }
 
-        sceIoClose(fd);
-        fd = -1;
+            if (storage_writer_close(&wr) < 0) {
+                sock_close(sock);
+                http_set_fail("file");
+                dbg_step("err_file");
+                return HTTP_ERR;
+            }
+        }
     }
 
     sock_close(sock);
@@ -961,7 +982,6 @@ int http_get_file_range(
     int total_size = -1;
     int written = 0;
     int status;
-    SceUID fd = -1;
     int append = (range_start > 0);
 
     g_http_fail[0] = '\0';
@@ -971,7 +991,7 @@ int http_get_file_range(
     if (out_total_size) {
         *out_total_size = -1;
     }
-    if (!filepath) {
+    if (!filepath || forbidden_stick_cache(filepath)) {
         http_set_fail("file");
         return HTTP_ERR;
     }
@@ -1071,58 +1091,22 @@ int http_get_file_range(
             return HTTP_ERR;
         }
 
-        if (append) {
-            fd = sceIoOpen(filepath, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_APPEND, 0777);
-        } else {
-            fd = sceIoOpen(filepath, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-        }
-        if (fd < 0) {
-            sock_close(sock);
-            http_set_fail("file");
-            return HTTP_ERR;
-        }
-
         leftover = hlen - (int)(sep + 4 - hdr);
-        if (leftover > 0) {
-            sceIoWrite(fd, sep + 4, leftover);
-            written += leftover;
-            if (progress) {
-                progress(
-                    (range_start > 0 ? range_start : 0) + written,
-                    total_size > 0 ? total_size : content_length,
-                    userdata
-                );
-            }
-        }
-
         {
-            char chunk[4096];
-            for (;;) {
-                int r;
-                if (g_http_abort) {
-                    break;
-                }
-                /* Idle timeout — OTA used to freeze forever at ~50% on WiFi stalls. */
-                r = sock_recv_abortable_ex(sock, chunk, sizeof(chunk), 20000000u);
-                if (r < 0) {
-                    if (g_http_abort) {
-                        break;
-                    }
-                    sceIoClose(fd);
-                    sock_close(sock);
-                    http_set_fail("recv_timeout");
-                    return HTTP_ERR;
-                }
-                if (r == 0) {
-                    break;
-                }
-                if (sceIoWrite(fd, chunk, r) != r) {
-                    sceIoClose(fd);
+            StorageWriter wr;
+            if (storage_writer_open(&wr, filepath, append) < 0) {
+                sock_close(sock);
+                http_set_fail("file");
+                return HTTP_ERR;
+            }
+            if (leftover > 0) {
+                if (storage_writer_write(&wr, sep + 4, leftover) < 0) {
+                    storage_writer_close(&wr);
                     sock_close(sock);
                     http_set_fail("file");
                     return HTTP_ERR;
                 }
-                written += r;
+                written += leftover;
                 if (progress) {
                     progress(
                         (range_start > 0 ? range_start : 0) + written,
@@ -1130,12 +1114,54 @@ int http_get_file_range(
                         userdata
                     );
                 }
-                if (content_length > 0 && written >= content_length) {
-                    break;
+            }
+
+            {
+                char chunk[4096];
+                for (;;) {
+                    int r;
+                    if (g_http_abort) {
+                        break;
+                    }
+                    /* Idle timeout — OTA used to freeze forever at ~50% on WiFi stalls. */
+                    r = sock_recv_abortable_ex(sock, chunk, sizeof(chunk), 20000000u);
+                    if (r < 0) {
+                        if (g_http_abort) {
+                            break;
+                        }
+                        storage_writer_close(&wr);
+                        sock_close(sock);
+                        http_set_fail("recv_timeout");
+                        return HTTP_ERR;
+                    }
+                    if (r == 0) {
+                        break;
+                    }
+                    if (storage_writer_write(&wr, chunk, r) < 0) {
+                        storage_writer_close(&wr);
+                        sock_close(sock);
+                        http_set_fail("file");
+                        return HTTP_ERR;
+                    }
+                    written += r;
+                    if (progress) {
+                        progress(
+                            (range_start > 0 ? range_start : 0) + written,
+                            total_size > 0 ? total_size : content_length,
+                            userdata
+                        );
+                    }
+                    if (content_length > 0 && written >= content_length) {
+                        break;
+                    }
                 }
             }
+            if (storage_writer_close(&wr) < 0) {
+                sock_close(sock);
+                http_set_fail("file");
+                return HTTP_ERR;
+            }
         }
-        sceIoClose(fd);
     }
 
     sock_close(sock);

@@ -1,8 +1,8 @@
 #include "theme.h"
 #include "paths.h"
 #include "player.h"
+#include "storage.h"
 
-#include <pspiofilemgr.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -179,18 +179,18 @@ static void theme_path(char *out, int out_sz) {
 int theme_load(void) {
     char path[280];
     char line[96];
-    SceUID fd;
+    int fd;
     int skin = 0;
     int eq = 0;
     int n;
 
     theme_path(path, sizeof(path));
-    fd = sceIoOpen(path, PSP_O_RDONLY, 0777);
+    fd = storage_open_read(path);
     if (fd < 0) {
         return -1;
     }
-    n = sceIoRead(fd, line, sizeof(line) - 1);
-    sceIoClose(fd);
+    n = storage_read(fd, line, sizeof(line) - 1);
+    storage_close(fd);
     if (n <= 0) {
         return -1;
     }
@@ -215,19 +215,15 @@ int theme_load(void) {
 int theme_save(void) {
     char path[280];
     char line[64];
-    SceUID fd;
     int n;
 
     paths_ensure_data();
     theme_path(path, sizeof(path));
-    fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    if (fd < 0) {
-        return -1;
-    }
     n = snprintf(line, sizeof(line), "skin %d eq %d\n", g_skin_id, player_get_eq_preset());
-    sceIoWrite(fd, line, n);
-    sceIoClose(fd);
-    return 0;
+    if (n < 0 || n >= (int)sizeof(line)) {
+        n = (int)strlen(line);
+    }
+    return storage_write_file_if_changed(path, line, n);
 }
 
 int skin_get_id(void) {

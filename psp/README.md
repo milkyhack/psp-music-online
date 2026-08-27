@@ -1,23 +1,18 @@
 # PSP client (`PSPMUSIC` / `PSPMUSICUPD`)
 
-Full setup guide: **[../README.md](../README.md)**.
-
-## Build
+Full guide: **[../README.md](../README.md)**.
 
 ```bash
-# Requires pspdev on PATH
-make            # EBOOT.PBP — player
-make companion  # dist/PSPMUSICUPD/EBOOT.PBP — Music Updater
+make            # player EBOOT.PBP
+make companion  # Music Updater
 ```
 
-Release builds have debug logging compiled out. QA: `make DEBUG_HUD=1`.
-
-## Install paths
+Release builds have no debug overlay. QA HUD (RAM only): `make DEBUG_HUD=1`.
 
 ```text
 ms0:/PSP/GAME/PSPMUSIC/EBOOT.PBP
-ms0:/PSP/GAME/PSPMUSIC/server.cfg          # "IP PORT"
-ms0:/PSP/GAME/PSPMUSICUPD/EBOOT.PBP        # OTA companion
+ms0:/PSP/GAME/PSPMUSIC/server.cfg
+ms0:/PSP/GAME/PSPMUSICUPD/EBOOT.PBP
 ```
 
-Online audio is **MP3 320** from the server (including FLAC sources). Soft-FLAC is for local/offline files only.
+Online audio is **MP3 320** in RAM. Soft-FLAC is for local/offline files only.

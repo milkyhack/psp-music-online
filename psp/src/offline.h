@@ -29,7 +29,7 @@ int offline_save(
     int rating,
     const char *src_mp3_path
 );
-/* Register a verified FLAC under ms0:/MUSIC (no second copy). */
+/* Register a verified file under ms0:/MUSIC (no second copy). */
 int offline_register_flac(
     int track_id,
     const char *artist,

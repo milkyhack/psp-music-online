@@ -6,6 +6,7 @@
 #include <pspkernel.h>
 #include <stdio.h>
 #include <string.h>
+#include <stddef.h>
 #include <ctype.h>
 
 static DownloadStatus g_dl;
@@ -68,10 +69,10 @@ void download_build_paths(
     storage_mkdir(dir2);
 
     if (track_num > 0) {
-        snprintf(final_out, final_sz, "%s/%02d - %s.flac", dir2, track_num, t);
+        snprintf(final_out, final_sz, "%s/%02d - %s.mp3", dir2, track_num, t);
         snprintf(tmp_out, tmp_sz, "%s/%02d - %s.tmp", dir2, track_num, t);
     } else {
-        snprintf(final_out, final_sz, "%s/%s.flac", dir2, t);
+        snprintf(final_out, final_sz, "%s/%s.mp3", dir2, t);
         snprintf(tmp_out, tmp_sz, "%s/%s.tmp", dir2, t);
     }
 }
@@ -217,11 +218,13 @@ static int download_thread(SceSize args, void *argp) {
             g_thid = -1;
             return 0;
         }
-        if (is_mp3) {
-            /* Paths were built as .flac — rewrite final to .mp3 for honesty. */
+        if (is_flac) {
             char *dot = strrchr(g_dl.final_path, '.');
-            if (dot && strcmp(dot, ".flac") == 0) {
-                strcpy(dot, ".mp3");
+            if (dot) {
+                size_t room = sizeof(g_dl.final_path) - (size_t)(dot - g_dl.final_path);
+                if (room >= sizeof(".flac")) {
+                    memcpy(dot, ".flac", sizeof(".flac"));
+                }
             }
         }
     }

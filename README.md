@@ -2,37 +2,49 @@
 
 **Language / Язык:** [English](#english) · [Русский](#russian)
 
-**Download / Скачать:** [Releases](https://github.com/milkyhack/psp-music-online/releases) — ready `EBOOT.PBP` (player + Music Updater), no build needed.
+**Download / Скачать:** [Releases](https://github.com/milkyhack/psp-music-online/releases) — `EBOOT.PBP` (player + Music Updater).
 
 ---
 
 ## English
 
-**PSP Music Online** — stream your PC music library to a real PSP over Wi‑Fi.
+**PSP Music Online** streams your PC music library to a real PSP over Wi‑Fi.
 
 LAN only. Same Wi‑Fi. No cloud.
 
 ### Contents
 
+- [What's new](#whats-new)
 - [Features](#features)
 - [Screenshots](#screenshots)
-- [Quick start (5 minutes)](#quick-start-5-minutes)
+- [Quick start](#quick-start-5-minutes)
 - [Controls](#controls)
 - [Music Updater](#music-updater)
 - [Audio quality](#audio-quality)
 - [FAQ](#faq)
 - [License](#license)
 
+### What's new
+
+**1.3.14**
+
+| Area | What it does |
+|------|----------------|
+| **Online play** | Audio stays in RAM. The Memory Stick is not used while a track streams. |
+| **Music Updater** | The new `EBOOT.PBP` is received in memory, checked (size + SHA-256), then written **once**. |
+| **Offline save** | **START** stores one file under `ms0:/MUSIC/Artist/Album/`. |
+| **Settings** | IP and theme are written only when the value actually changes. |
+
 ### Features
 
-- **PC FastAPI server + PSP CFW homebrew client** — your library stays on your machine
+- **PC FastAPI server + PSP CFW client** — the library stays on your machine
 - **Online stream** — FLAC / M4A / WAV are transcoded on the server to **MP3 320** for hardware `sceMp3`
 - **MP3 sources** — passthrough (no extra re-encode)
-- **Covers** — album art before and during playback
+- **Covers** — album art before and during playback (RAM)
 - **Browse & search** — artists, albums, tracks
-- **Offline download** — save tracks to the Memory Stick, play without Wi‑Fi
-- **Music Updater** — separate XMB icon: install if missing, update if old, or say you already have the latest
-- **Themes / skins** — **Neon Terminal** (default, matches README gallery) plus Midnight and more in Appearance
+- **Offline** — save tracks to the Memory Stick, play without Wi‑Fi
+- **Music Updater** — separate XMB icon: install if missing, update if old
+- **Themes** — **Neon Terminal** (default) plus Midnight and more in Appearance
 - **Admin UI** — `http://IP:8084/` for scan, cache, and diagnostics
 
 ### Screenshots
@@ -144,6 +156,8 @@ Or on the PSP: **Setup IP/Port** → set octets → it saves automatically.
 
 Separate XMB app. Installs or updates **PSP Music**.
 
+Press **X** only when the screen says an update is available. It does not start a download by itself.
+
 | State | Message | What to do |
 |-------|---------|------------|
 | Not installed | `not installed` | Press **X** to download |
@@ -171,16 +185,26 @@ Local FLAC on the Memory Stick can play offline via soft decode — that path is
 ### FAQ
 
 <details>
-<summary><strong>Updater says “check failed”</strong></summary>
+<summary><strong>Does streaming write to the Memory Stick?</strong></summary>
 
-The server is down, or the PSP is on another network. From a phone on the same Wi‑Fi, open `http://IP:8084/api/client/update`. The IP in `server.cfg` must match the admin page.
+No. Online playback uses RAM. The stick is written when you:
+
+- press **START** (offline save) — one file under `ms0:/MUSIC/`
+- run **Music Updater** — one `EBOOT.PBP` after it checks the file in memory
+- change IP or theme — a small config, only if it changed
+</details>
+
+<details>
+<summary><strong>Updater says “check failed” / “EBOOT not on server”</strong></summary>
+
+The server is down, PSP is on another network, or no `EBOOT.PBP` is published under `server/data/client/`. From a phone on the same Wi‑Fi, open `http://IP:8084/api/client/update`. The IP in `server.cfg` must match the admin page.
 </details>
 
 <details>
 <summary><strong>Silence / Loading never finishes</strong></summary>
 
-1. In admin: **Scan** + **Warm cache**  
-2. Confirm ffmpeg is available (`ffmpeg` on PATH or the pip package)  
+1. In admin: **Scan** + **Warm cache**
+2. Confirm ffmpeg is available (`ffmpeg` on PATH or the pip package)
 3. Restart the server after code updates
 </details>
 
@@ -231,9 +255,9 @@ Copyright (c) 2026 **milkyhack**.
 
 **Required** on every fork and distribution:
 
-1. Keep notices and the license text  
-2. Credit **PSP Music Online** / milkyhack  
-3. Link the original: https://github.com/milkyhack/psp-music-online  
+1. Keep notices and the license text
+2. Credit **PSP Music Online** / milkyhack
+3. Link the original: https://github.com/milkyhack/psp-music-online
 
 Commercial use needs separate written permission from the copyright holder.
 
@@ -247,31 +271,43 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 
 ## Русский
 
-**PSP Music Online** — стрим своей музыки с ПК на настоящую PSP по Wi‑Fi.
+**PSP Music Online** стримит вашу музыку с ПК на настоящую PSP по Wi‑Fi.
 
 Только LAN. Одна и та же сеть Wi‑Fi. Без облака.
 
 ### Содержание
 
+- [Что нового](#что-нового)
 - [Возможности](#возможности)
 - [Скриншоты](#скриншоты)
-- [Быстрый старт (5 минут)](#быстрый-старт-5-минут)
+- [Быстрый старт](#быстрый-старт-5-минут)
 - [Управление](#управление)
 - [Music Updater](#music-updater-1)
 - [Качество звука](#качество-звука)
 - [Частые вопросы](#частые-вопросы)
 - [Лицензия](#лицензия)
 
+### Что нового
+
+**1.3.14**
+
+| Где | Что сделано |
+|-----|-------------|
+| **Онлайн** | Звук идёт в RAM. Пока трек стримится, Memory Stick не трогается. |
+| **Music Updater** | Новый `EBOOT.PBP` принимается в память, проверяется (размер + SHA-256) и пишется на карту **один раз**. |
+| **Офлайн** | **START** сохраняет один файл в `ms0:/MUSIC/Artist/Album/`. |
+| **Настройки** | IP и тема пишутся только если значение реально изменилось. |
+
 ### Возможности
 
 - **Сервер FastAPI на ПК + CFW‑клиент на PSP** — библиотека остаётся у вас
 - **Онлайн‑стрим** — FLAC / M4A / WAV на сервере перекодируются в **MP3 320** под аппаратный `sceMp3`
 - **MP3‑файлы** — отдаются как есть (без лишнего перекодирования)
-- **Обложки** — до и во время воспроизведения
+- **Обложки** — до и во время воспроизведения (в RAM)
 - **Просмотр и поиск** — артисты, альбомы, треки
 - **Офлайн** — скачивание на Memory Stick, затем без Wi‑Fi
-- **Music Updater** — отдельная иконка в XMB: установит, если нет / обновит, если устарело / сообщит, что версия уже актуальная
-- **Темы / скины** — по умолчанию **Neon Terminal** (как на скринах в README), плюс Midnight и другие в Appearance
+- **Music Updater** — отдельная иконка в XMB: установит, если нет / обновит, если устарело
+- **Темы** — по умолчанию **Neon Terminal**, плюс Midnight и другие в Appearance
 - **Админка** — `http://IP:8084/` для сканирования, кэша и диагностики
 
 ### Скриншоты
@@ -383,6 +419,8 @@ ms0:/PSP/GAME/PSPMUSICUPD/EBOOT.PBP   ← Music Updater
 
 Отдельное приложение в XMB. Устанавливает или обновляет **PSP Music**.
 
+**X** только когда на экране есть доступное обновление. Само по себе скачивание не стартует.
+
 | Состояние | Сообщение | Что делать |
 |-----------|-----------|------------|
 | Нет приложения | `not installed` | **X** — скачать |
@@ -410,16 +448,26 @@ Wi‑Fi PSP (~802.11b) не обеспечивает стабильный lossle
 ### Частые вопросы
 
 <details>
-<summary><strong>Updater: «check failed»</strong></summary>
+<summary><strong>Стрим пишет на Memory Stick?</strong></summary>
 
-Сервер не запущен или PSP в другой сети. С телефона в той же сети Wi‑Fi открой `http://IP:8084/api/client/update`. IP в `server.cfg` должен совпадать с админкой.
+Нет. Онлайн идёт в RAM. На карту пишется, когда вы:
+
+- жмёте **START** (офлайн) — один файл в `ms0:/MUSIC/`
+- запускаете **Music Updater** — один `EBOOT.PBP` после проверки в памяти
+- меняете IP или тему — маленький конфиг, только если значение изменилось
+</details>
+
+<details>
+<summary><strong>Updater: «check failed» / «EBOOT not on server»</strong></summary>
+
+Сервер не запущен, PSP в другой сети, или в `server/data/client/` нет опубликованного `EBOOT.PBP`. С телефона в той же сети Wi‑Fi открой `http://IP:8084/api/client/update`. IP в `server.cfg` должен совпадать с админкой.
 </details>
 
 <details>
 <summary><strong>Тишина / Loading зависает</strong></summary>
 
-1. В админке: **Scan** + **Warm cache**  
-2. Убедись, что ffmpeg доступен (`ffmpeg` в PATH или pip‑пакет)  
+1. В админке: **Scan** + **Warm cache**
+2. Убедись, что ffmpeg доступен (`ffmpeg` в PATH или pip‑пакет)
 3. Перезапусти сервер после обновления кода
 </details>
 
@@ -470,9 +518,9 @@ Copyright (c) 2026 **milkyhack**.
 
 **Обязательно** в любом форке и при любом распространении:
 
-1. Сохранить уведомления об авторских правах и текст лицензии  
-2. Указать, что проект основан на **PSP Music Online** / milkyhack  
-3. Дать явную ссылку: https://github.com/milkyhack/psp-music-online  
+1. Сохранить уведомления об авторских правах и текст лицензии
+2. Указать, что проект основан на **PSP Music Online** / milkyhack
+3. Дать явную ссылку: https://github.com/milkyhack/psp-music-online
 
 Коммерческое использование — только по отдельному письменному разрешению правообладателя.
 

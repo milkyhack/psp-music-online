@@ -5,10 +5,10 @@
 ```bash
 cd psp
 make companion          # release
-make DEBUG_HUD=1        # QA overlay + debug.log
+make DEBUG_HUD=1        # QA overlay in RAM
 ```
 
-Keep online streaming on the **MP3 320** path. Soft-FLAC is for local/offline only.
+Online streaming stays on the **MP3 320** path. Soft-FLAC is for local/offline only.
 
 ## Server
 
@@ -25,4 +25,4 @@ Do not commit `server/data/` (library DB, caches, client logs).
 
 1. Bump `APP_VER` / `APP_VER_CODE` in `psp/Makefile` and `psp/src/updater.h`
 2. `make companion`
-3. Publish `EBOOT.PBP` + `update.json` under `server/data/client/` (local) or GitHub Releases
+3. Publish `EBOOT.PBP` + `update.json` under `server/data/client/` or GitHub Releases

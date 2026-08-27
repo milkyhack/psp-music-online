@@ -2082,27 +2082,15 @@ static void poll_download_side_effects(void) {
     if (ds->state == DL_COMPLETE && g_track_id == ds->track_id) {
         g_now_offline = 1;
         if (ds->final_path[0]) {
-            const char *dot = strrchr(ds->final_path, '.');
-            int as_flac = (dot && (strcmp(dot, ".flac") == 0 || strcmp(dot, ".FLAC") == 0));
-            if (as_flac) {
-                offline_register_flac(
-                    ds->track_id,
-                    ds->artist,
-                    ds->album,
-                    ds->title,
-                    g_now_rating,
-                    ds->final_path
-                );
-            } else {
-                offline_save(
-                    ds->track_id,
-                    ds->artist,
-                    ds->album,
-                    ds->title,
-                    g_now_rating,
-                    ds->final_path
-                );
-            }
+            /* One file on the stick — index only, never copy to data/offline/. */
+            offline_register_flac(
+                ds->track_id,
+                ds->artist,
+                ds->album,
+                ds->title,
+                g_now_rating,
+                ds->final_path
+            );
         }
         /* Cover stays in RAM — no MS write (offline music file only). */
         if (g_online_mode && !ui_image_cover_for(ds->track_id)) {
@@ -2800,7 +2788,6 @@ int main(int argc, char *argv[]) {
                     }
                     g_eq_preset = g_eq_cursor;
                     player_set_eq_preset(g_eq_preset);
-                    theme_save();
                 }
                 if (pressed & PSP_CTRL_RIGHT) {
                     g_eq_cursor++;
@@ -2809,7 +2796,6 @@ int main(int argc, char *argv[]) {
                     }
                     g_eq_preset = g_eq_cursor;
                     player_set_eq_preset(g_eq_preset);
-                    theme_save();
                 }
                 if (pressed & PSP_CTRL_CROSS) {
                     g_eq_preset = g_eq_cursor;
@@ -2818,6 +2804,7 @@ int main(int argc, char *argv[]) {
                     set_status("EQ applied");
                 }
                 if ((pressed & PSP_CTRL_SELECT) || (pressed & PSP_CTRL_CIRCLE)) {
+                    theme_save();
                     g_show_eq = 0;
                 }
             } else if (g_queue_focus) {

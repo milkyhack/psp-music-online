@@ -3,7 +3,8 @@
 
 /*
  * Release (default): all debug logging compiles out — zero MS I/O / Wi‑Fi spam.
- * QA: build with `make DEBUG_HUD=1` for on-device debug.log + HUD.
+ * QA: build with `make DEBUG_HUD=1` for on-screen HUD only (RAM ring).
+ * Never write debug.log to the Memory Stick — append+close every line kills NAND.
  */
 #ifdef DEBUG_HUD
 

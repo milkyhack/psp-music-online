@@ -1,5 +1,6 @@
 #include "offline.h"
 #include "paths.h"
+#include "storage.h"
 
 #include <pspiofilemgr.h>
 #include <stdio.h>
@@ -9,29 +10,6 @@
 void offline_ensure_dirs(void) {
     paths_ensure_data();
     sceIoMkdir("ms0:/MUSIC", 0777);
-}
-
-static int copy_file(const char *src, const char *dst) {
-    SceUID in = sceIoOpen(src, PSP_O_RDONLY, 0777);
-    if (in < 0) {
-        return -1;
-    }
-    SceUID out = sceIoOpen(dst, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    if (out < 0) {
-        sceIoClose(in);
-        return -2;
-    }
-    char buf[4096];
-    for (;;) {
-        int n = sceIoRead(in, buf, sizeof(buf));
-        if (n <= 0) {
-            break;
-        }
-        sceIoWrite(out, buf, n);
-    }
-    sceIoClose(in);
-    sceIoClose(out);
-    return 0;
 }
 
 int offline_path_for(int track_id, char *out, int out_sz) {
@@ -298,7 +276,7 @@ static int scan_music_dir(const char *dir, OfflineTrack *out, int max_items, int
         snprintf(child, sizeof(child), "%s/%s", dir, de.d_name);
         if (FIO_S_ISDIR(de.d_stat.st_mode)) {
             scan_music_dir(child, out, max_items, count);
-        } else if (ends_with_ci(de.d_name, ".flac")) {
+        } else if (ends_with_ci(de.d_name, ".flac") || ends_with_ci(de.d_name, ".mp3")) {
             OfflineTrack *t;
             if (already_has_path(out, *count, child)) {
                 memset(&de, 0, sizeof(de));
@@ -307,7 +285,7 @@ static int scan_music_dir(const char *dir, OfflineTrack *out, int max_items, int
             t = &out[*count];
             memset(t, 0, sizeof(*t));
             t->id = 100000 + *count; /* synthetic local id */
-            t->is_flac = 1;
+            t->is_flac = ends_with_ci(de.d_name, ".flac") ? 1 : 0;
             strncpy(t->path, child, sizeof(t->path) - 1);
             parse_music_path(
                 child,
@@ -370,7 +348,7 @@ static int load_music_index(OfflineTrack *out, int max_items, int start) {
             SceUID f2 = sceIoOpen(t->path, PSP_O_RDONLY, 0777);
             if (f2 >= 0) {
                 sceIoClose(f2);
-                t->is_flac = 1;
+                t->is_flac = ends_with_ci(t->path, ".flac") ? 1 : 0;
                 count++;
             }
         }
@@ -386,16 +364,15 @@ static int write_music_index(const OfflineTrack *items, int n) {
     char idx[280];
     char line[400];
     int i;
-    SceUID fd;
+    StorageWriter wr;
     music_idx_path(idx, sizeof(idx));
     paths_ensure_data();
-    fd = sceIoOpen(idx, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    if (fd < 0) {
+    if (storage_writer_open(&wr, idx, 0) < 0) {
         return -1;
     }
     for (i = 0; i < n; i++) {
         int len;
-        if (!items[i].is_flac || !items[i].path[0]) {
+        if (!items[i].path[0]) {
             continue;
         }
         len = snprintf(
@@ -409,10 +386,12 @@ static int write_music_index(const OfflineTrack *items, int n) {
             items[i].rating,
             items[i].path
         );
-        sceIoWrite(fd, line, len);
+        if (storage_writer_write(&wr, line, len) < 0) {
+            storage_writer_close(&wr);
+            return -1;
+        }
     }
-    sceIoClose(fd);
-    return 0;
+    return storage_writer_close(&wr);
 }
 
 int offline_load(OfflineTrack *out, int max_items) {
@@ -489,68 +468,8 @@ int offline_save(
     int rating,
     const char *src_mp3_path
 ) {
-    char dest[280];
-    char idx[280];
-    char line[320];
-    offline_ensure_dirs();
-    offline_path_for(track_id, dest, sizeof(dest));
-
-    if (copy_file(src_mp3_path, dest) < 0) {
-        return -1;
-    }
-
-    OfflineTrack items[OFFLINE_MAX];
-    int n = offline_load(items, OFFLINE_MAX);
-    int i;
-    int found = 0;
-    for (i = 0; i < n; i++) {
-        if (items[i].id == track_id && !items[i].is_flac) {
-            strncpy(items[i].artist, artist ? artist : "", MAX_NAME - 1);
-            strncpy(items[i].album, album ? album : "", MAX_NAME - 1);
-            strncpy(items[i].title, title ? title : "", MAX_NAME - 1);
-            items[i].rating = rating;
-            snprintf(items[i].file, sizeof(items[i].file), "%d.mp3", track_id);
-            found = 1;
-            break;
-        }
-    }
-    if (!found && n < OFFLINE_MAX) {
-        items[n].id = track_id;
-        strncpy(items[n].artist, artist ? artist : "", MAX_NAME - 1);
-        strncpy(items[n].album, album ? album : "", MAX_NAME - 1);
-        strncpy(items[n].title, title ? title : "", MAX_NAME - 1);
-        items[n].rating = rating;
-        snprintf(items[n].file, sizeof(items[n].file), "%d.mp3", track_id);
-        n++;
-    }
-
-    offline_idx_path(idx, sizeof(idx));
-    {
-        SceUID wfd = sceIoOpen(idx, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-        if (wfd < 0) {
-            return -2;
-        }
-        for (i = 0; i < n; i++) {
-            int len;
-            if (items[i].is_flac) {
-                continue;
-            }
-            len = snprintf(
-                line,
-                sizeof(line),
-                "%d|%s|%s|%s|%d|%s\n",
-                items[i].id,
-                items[i].artist,
-                items[i].album,
-                items[i].title,
-                items[i].rating,
-                items[i].file
-            );
-            sceIoWrite(wfd, line, len);
-        }
-        sceIoClose(wfd);
-    }
-    return 0;
+    /* Index in place — never copy a finished download (that doubled MS wear). */
+    return offline_register_flac(track_id, artist, album, title, rating, src_mp3_path);
 }
 
 int offline_register_flac(
@@ -573,8 +492,11 @@ int offline_register_flac(
     for (i = 0; i < n; i++) {
         if (items[i].id == track_id ||
             (items[i].path[0] && strcmp(items[i].path, flac_path) == 0)) {
+            if (items[i].id == track_id && strcmp(items[i].path, flac_path) == 0) {
+                return 0; /* already indexed — do not rewrite the catalog */
+            }
             items[i].id = track_id;
-            items[i].is_flac = 1;
+            items[i].is_flac = ends_with_ci(flac_path, ".flac") ? 1 : 0;
             strncpy(items[i].artist, artist ? artist : "", MAX_NAME - 1);
             strncpy(items[i].album, album ? album : "", MAX_NAME - 1);
             strncpy(items[i].title, title ? title : "", MAX_NAME - 1);
@@ -587,7 +509,7 @@ int offline_register_flac(
     if (!found && n < OFFLINE_MAX) {
         memset(&items[n], 0, sizeof(items[n]));
         items[n].id = track_id;
-        items[n].is_flac = 1;
+        items[n].is_flac = ends_with_ci(flac_path, ".flac") ? 1 : 0;
         strncpy(items[n].artist, artist ? artist : "", MAX_NAME - 1);
         strncpy(items[n].album, album ? album : "", MAX_NAME - 1);
         strncpy(items[n].title, title ? title : "", MAX_NAME - 1);
@@ -618,13 +540,14 @@ int offline_delete(int track_id) {
 
     offline_idx_path(idx, sizeof(idx));
     {
-        SceUID fd = sceIoOpen(idx, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-        if (fd < 0) {
+        StorageWriter wr;
+        if (storage_writer_open(&wr, idx, 0) < 0) {
             return -1;
         }
         for (i = 0; i < n; i++) {
             int len;
-            if (items[i].id == track_id || items[i].is_flac) {
+            /* Legacy data/offline/{id}.mp3 rows only. */
+            if (items[i].id == track_id || items[i].path[0]) {
                 continue;
             }
             len = snprintf(
@@ -638,15 +561,20 @@ int offline_delete(int track_id) {
                 items[i].rating,
                 items[i].file
             );
-            sceIoWrite(fd, line, len);
+            if (storage_writer_write(&wr, line, len) < 0) {
+                storage_writer_close(&wr);
+                return -1;
+            }
         }
-        sceIoClose(fd);
+        if (storage_writer_close(&wr) < 0) {
+            return -1;
+        }
     }
     {
         OfflineTrack keep[OFFLINE_MAX];
         int k = 0;
         for (i = 0; i < n; i++) {
-            if (items[i].is_flac && items[i].id != track_id) {
+            if (items[i].path[0] && items[i].id != track_id) {
                 keep[k++] = items[i];
             }
         }

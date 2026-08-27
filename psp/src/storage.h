@@ -12,6 +12,16 @@ typedef struct {
     unsigned long long temporaryFilesDeleted;
 } StorageStats;
 
+/* Coalesced writer — fewer FAT updates on Memory Stick. */
+#define STORAGE_WBUF 32768
+
+typedef struct {
+    int fd;
+    unsigned char *buf;
+    int used;
+    int cap;
+} StorageWriter;
+
 void storage_init(void);
 const StorageStats *storage_stats(void);
 void storage_reset_stats(void);
@@ -29,6 +39,15 @@ int storage_mkdir(const char *path);
 int storage_exists(const char *path);
 int storage_size(const char *path);
 int storage_sync(void);
+
+/* One-shot small file (config/theme). Skips the write if contents match. */
+int storage_write_file(const char *path, const void *data, int len);
+int storage_write_file_if_changed(const char *path, const void *data, int len);
+
+/* Buffered download/update writer (heap buffer, not thread-stack). */
+int storage_writer_open(StorageWriter *w, const char *path, int append);
+int storage_writer_write(StorageWriter *w, const void *data, int len);
+int storage_writer_close(StorageWriter *w);
 
 /* Temp file lifecycle (still on MS, but tracked separately). */
 int storage_temp_create(const char *path);

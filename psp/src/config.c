@@ -1,8 +1,8 @@
 #include "config.h"
 #include "paths.h"
 #include "debug_log.h"
+#include "storage.h"
 
-#include <pspiofilemgr.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,10 +14,6 @@ void config_path(char *out, int out_sz) {
 void config_path_alt(char *out, int out_sz) {
     /* Fallback next to EBOOT if data/ write fails on some MS layouts. */
     paths_join(out, out_sz, "server.cfg");
-}
-
-void cache_mp3_path(char *out, int out_sz) {
-    paths_join(out, out_sz, "data/cache.mp3");
 }
 
 static void strip_cfg_line(char *s) {
@@ -74,16 +70,16 @@ static int parse_cfg_buf(const char *buf, ServerConfig *cfg) {
 }
 
 static int load_from_path(const char *path, ServerConfig *cfg) {
-    SceUID fd;
+    int fd;
     char buf[192];
     int n;
 
-    fd = sceIoOpen(path, PSP_O_RDONLY, 0777);
+    fd = storage_open_read(path);
     if (fd < 0) {
         return 0;
     }
-    n = sceIoRead(fd, buf, sizeof(buf) - 1);
-    sceIoClose(fd);
+    n = storage_read(fd, buf, sizeof(buf) - 1);
+    storage_close(fd);
     if (n <= 0) {
         return 0;
     }
@@ -141,20 +137,9 @@ int config_load(ServerConfig *cfg) {
 }
 
 static int write_cfg_file(const char *path, const ServerConfig *cfg) {
-    SceUID fd;
     char buf[192];
     int n;
-    int w;
 
-    sceIoRemove(path);
-    fd = sceIoOpen(path, PSP_O_WRONLY | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    if (fd < 0) {
-        /* Some CFW prefer RDWR for create */
-        fd = sceIoOpen(path, PSP_O_RDWR | PSP_O_CREAT | PSP_O_TRUNC, 0777);
-    }
-    if (fd < 0) {
-        return -1;
-    }
     n = snprintf(
         buf,
         sizeof(buf),
@@ -163,20 +148,10 @@ static int write_cfg_file(const char *path, const ServerConfig *cfg) {
         cfg->port,
         cfg->api_key[0] ? cfg->api_key : "-"
     );
-    if (n < 0) {
+    if (n < 0 || n >= (int)sizeof(buf)) {
         n = (int)strlen(buf);
     }
-    w = sceIoWrite(fd, buf, (unsigned)n);
-    sceIoClose(fd);
-    if (w != n) {
-        return -2;
-    }
-    return 0;
-}
-
-static void ms_sync(void) {
-    /* Best-effort flush so the next boot sees the new IP. */
-    sceIoSync("ms0:", 0);
+    return storage_write_file_if_changed(path, buf, n);
 }
 
 int config_save(const ServerConfig *cfg) {
@@ -206,11 +181,7 @@ int config_save(const ServerConfig *cfg) {
     );
     dbg_log("E", "config.c:save", "write_data", d);
 
-    /* Always also write root server.cfg as backup */
-    write_cfg_file(alt, cfg);
-
     if (rc != 0) {
-        /* data/ failed — try root as primary */
         rc = write_cfg_file(alt, cfg);
         snprintf(
             d,
@@ -225,8 +196,6 @@ int config_save(const ServerConfig *cfg) {
             return -1;
         }
     }
-
-    ms_sync();
 
     /* Round-trip verify — catch silent MS write failures */
     memset(&verify, 0, sizeof(verify));

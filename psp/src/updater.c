@@ -372,6 +372,7 @@ int updater_check(const char *host, int port) {
     char sha[72];
     char notes[96];
     int size = 0;
+    int published = 1;
 
     g_up.state = UPD_CHECKING;
     g_up.error[0] = '\0';
@@ -392,6 +393,10 @@ int updater_check(const char *host, int port) {
     jutil_extract_string(body, "notes", notes, sizeof(notes));
     jutil_extract_int(body, "version_code", &code);
     jutil_extract_int(body, "size", &size);
+    published = 1;
+    if (strstr(body, "\"available\":false") || strstr(body, "\"available\": false")) {
+        published = 0;
+    }
     free(body);
 
     strncpy(g_up.remote_version, ver, sizeof(g_up.remote_version) - 1);
@@ -459,6 +464,11 @@ int updater_check(const char *host, int port) {
         }
 
         if (remote_code > local_code) {
+            if (!published || g_expected_size < 64 * 1024 || (int)strlen(g_sha_hex) < 64) {
+                strncpy(g_up.error, "EBOOT not on server", sizeof(g_up.error) - 1);
+                g_up.state = UPD_ERROR;
+                return -1;
+            }
             g_up.state = UPD_AVAILABLE;
             return 1;
         }
@@ -469,6 +479,11 @@ int updater_check(const char *host, int port) {
     }
 
     if (code > APP_VERSION_CODE) {
+        if (!published || g_expected_size < 64 * 1024 || (int)strlen(g_sha_hex) < 64) {
+            strncpy(g_up.error, "EBOOT not on server", sizeof(g_up.error) - 1);
+            g_up.state = UPD_ERROR;
+            return -1;
+        }
         g_up.state = UPD_AVAILABLE;
         return 1;
     }
@@ -494,13 +509,27 @@ static int hex_nibble(char c) {
     return -1;
 }
 
+static int sha_matches(const unsigned char *hash) {
+    int i;
+    if ((int)strlen(g_sha_hex) < 64) {
+        return 0;
+    }
+    for (i = 0; i < 32; i++) {
+        int hi = hex_nibble(g_sha_hex[i * 2]);
+        int lo = hex_nibble(g_sha_hex[i * 2 + 1]);
+        if (hi < 0 || lo < 0 || ((hi << 4) | lo) != hash[i]) {
+            return 0;
+        }
+    }
+    return 1;
+}
+
 static int verify_eboot(const char *path) {
     int fd;
     unsigned char buf[4096];
     unsigned char hash[32];
     SHA256_CTX ctx;
     int n;
-    int i;
     char magic[4];
     int sz;
 
@@ -521,7 +550,6 @@ static int verify_eboot(const char *path) {
         storage_close(fd);
         return -2;
     }
-    /* Continue hashing from offset 0 — re-read from start. */
     storage_close(fd);
 
     fd = storage_open_read(path);
@@ -542,139 +570,221 @@ static int verify_eboot(const char *path) {
     }
     storage_close(fd);
     sha256_final(&ctx, hash);
+    return sha_matches(hash) ? 0 : -3;
+}
 
-    if ((int)strlen(g_sha_hex) < 64) {
-        return -3;
+#define EBOOT_RAM_MAX (6 * 1024 * 1024)
+
+typedef struct {
+    unsigned char *buf;
+    int cap;
+    int used;
+} RamEboot;
+
+static int ram_on_data(const void *data, int len, void *ud) {
+    RamEboot *s = (RamEboot *)ud;
+    if (g_cancel) {
+        return -1;
     }
-    for (i = 0; i < 32; i++) {
-        int hi = hex_nibble(g_sha_hex[i * 2]);
-        int lo = hex_nibble(g_sha_hex[i * 2 + 1]);
-        if (hi < 0 || lo < 0 || ((hi << 4) | lo) != hash[i]) {
-            return -3;
+    if (!s || !s->buf || !data || len <= 0) {
+        return -1;
+    }
+    if (s->used + len > s->cap) {
+        return -1;
+    }
+    memcpy(s->buf + s->used, data, (size_t)len);
+    s->used += len;
+    progress_cb(s->used, g_expected_size > 0 ? g_expected_size : s->cap, NULL);
+    return 0;
+}
+
+static int verify_eboot_mem(const unsigned char *data, int len) {
+    unsigned char hash[32];
+    SHA256_CTX ctx;
+    if (!data || len < 64 * 1024) {
+        return -5;
+    }
+    if (g_expected_size > 0 && len != g_expected_size) {
+        return -4;
+    }
+    if (data[0] != 0x00 || data[1] != 'P' || data[2] != 'B' || data[3] != 'P') {
+        return -2;
+    }
+    sha256_init(&ctx);
+    sha256_update(&ctx, data, (size_t)len);
+    sha256_final(&ctx, hash);
+    return sha_matches(hash) ? 0 : -3;
+}
+
+static void verify_fail_msg(int vrc) {
+    if (vrc == -3) {
+        strncpy(g_up.error, "SHA mismatch", sizeof(g_up.error) - 1);
+    } else if (vrc == -4) {
+        strncpy(g_up.error, "Size mismatch", sizeof(g_up.error) - 1);
+    } else {
+        snprintf(g_up.error, sizeof(g_up.error), "Verify failed (%d)", vrc);
+    }
+}
+
+static int install_tmp_rename(void) {
+    if (storage_exists(g_final)) {
+        storage_remove(g_bak);
+        storage_rename(g_final, g_bak);
+    }
+    if (storage_rename(g_tmp, g_final) < 0) {
+        if (storage_exists(g_bak)) {
+            storage_rename(g_bak, g_final);
         }
+        return -1;
+    }
+    storage_remove(g_bak);
+    return 0;
+}
+
+static int install_from_mem(const unsigned char *data, int len) {
+    StorageWriter wr;
+    storage_temp_discard(g_tmp);
+    if (storage_writer_open(&wr, g_tmp, 0) < 0) {
+        return -1;
+    }
+    if (storage_writer_write(&wr, data, len) < 0) {
+        storage_writer_close(&wr);
+        storage_temp_discard(g_tmp);
+        return -1;
+    }
+    if (storage_writer_close(&wr) < 0) {
+        storage_temp_discard(g_tmp);
+        return -1;
+    }
+    if (install_tmp_rename() < 0) {
+        storage_temp_discard(g_tmp);
+        return -1;
     }
     return 0;
 }
 
-static int update_thread(SceSize args, void *argp) {
-    int range = -1;
-    int clen = -1, total = -1;
-    int rc;
-    int vrc;
+static int download_to_ram(RamEboot *s) {
     int attempt;
-    (void)args;
-    (void)argp;
-
-    g_up.state = UPD_DOWNLOADING;
-    g_cancel = 0;
-    http_set_abort(0);
-
-    /*
-     * Always full re-download. WiFi stalls mid-file used to hang forever in
-     * blocking recv; http_get_file_range now idle-times out — retry a few times.
-     */
+    int clen = -1;
+    int total = -1;
+    int rc;
     for (attempt = 0; attempt < 3; attempt++) {
-        storage_temp_discard(g_tmp);
-        {
-            int fd = storage_temp_create(g_tmp);
-            if (fd < 0) {
-                strncpy(g_up.error, "Not enough storage", sizeof(g_up.error) - 1);
-                g_up.state = UPD_ERROR;
-                g_thid = -1;
-                return 0;
-            }
-            storage_close(fd);
-        }
-        range = -1;
+        s->used = 0;
         g_up.bytes = 0;
         g_up.percent = 0;
         g_up.state = UPD_DOWNLOADING;
         if (attempt > 0) {
             sceKernelDelayThread(400000);
         }
-
-        rc = http_get_file_range(
-            g_host, g_port, "/api/client/EBOOT.PBP", g_tmp, range,
-            progress_cb, NULL, &clen, &total
+        rc = http_get_stream(
+            g_host,
+            g_port,
+            "/api/client/EBOOT.PBP",
+            -1,
+            ram_on_data,
+            s,
+            progress_cb,
+            NULL,
+            &clen,
+            &total
         );
         if (g_cancel || rc == HTTP_ABORTED) {
-            g_up.state = UPD_INCOMPLETE;
-            g_thid = -1;
-            return 0;
+            return HTTP_ABORTED;
         }
-        if (rc != HTTP_OK) {
-            const char *why = http_last_fail_reason();
-            strncpy(g_up.error, why && why[0] ? why : "download failed", sizeof(g_up.error) - 1);
-            if (strcmp(g_up.error, "file") == 0) {
-                strncpy(g_up.error, "Not enough storage", sizeof(g_up.error) - 1);
-                storage_temp_discard(g_tmp);
-                g_up.state = UPD_ERROR;
-                g_thid = -1;
-                return 0;
+        if (rc == HTTP_OK) {
+            if (total > 0) {
+                g_up.total = total;
             }
-            if (strcmp(g_up.error, "recv_timeout") == 0 ||
-                strcmp(g_up.error, "trunc") == 0 ||
-                strcmp(g_up.error, "tcp") == 0 ||
-                strcmp(g_up.error, "recv") == 0) {
-                storage_temp_discard(g_tmp);
-                if (attempt < 2) {
-                    continue; /* retry transient WiFi / stall */
-                }
-                if (strcmp(g_up.error, "recv_timeout") == 0) {
-                    strncpy(g_up.error, "WiFi stall — retry", sizeof(g_up.error) - 1);
-                } else if (strcmp(g_up.error, "trunc") == 0) {
-                    strncpy(g_up.error, "Download cut off — retry", sizeof(g_up.error) - 1);
-                }
-            }
-            g_up.state = UPD_ERROR;
-            g_thid = -1;
-            return 0;
-        }
-
-        g_up.state = UPD_VERIFYING;
-        vrc = verify_eboot(g_tmp);
-        if (vrc == 0) {
-            break;
+            return HTTP_OK;
         }
         {
-            char d[64];
-            snprintf(d, sizeof(d), "{\"vrc\":%d,\"sz\":%d,\"try\":%d}", vrc, storage_size(g_tmp), attempt);
-            dbg_log("U", "updater.c:verify", "fail", d);
+            const char *why = http_last_fail_reason();
+            if (why &&
+                (strcmp(why, "recv_timeout") == 0 ||
+                 strcmp(why, "trunc") == 0 ||
+                 strcmp(why, "tcp") == 0 ||
+                 strcmp(why, "recv") == 0) &&
+                attempt < 2) {
+                continue; /* retry in RAM only — Memory Stick untouched */
+            }
+            strncpy(g_up.error, why && why[0] ? why : "download failed", sizeof(g_up.error) - 1);
+            return HTTP_ERR;
         }
+    }
+    strncpy(g_up.error, "Wi-Fi stall", sizeof(g_up.error) - 1);
+    return HTTP_ERR;
+}
+
+static int download_to_file_resume(void) {
+    int attempt;
+    int clen = -1;
+    int total = -1;
+    int rc;
+    int existing = storage_size(g_tmp);
+    int range;
+
+    if (existing < 1024) {
+        int fd;
         storage_temp_discard(g_tmp);
-        if (attempt < 2) {
-            continue;
+        fd = storage_temp_create(g_tmp);
+        if (fd < 0) {
+            strncpy(g_up.error, "Not enough storage", sizeof(g_up.error) - 1);
+            return HTTP_ERR;
         }
-        if (vrc == -3) {
-            snprintf(g_up.error, sizeof(g_up.error), "SHA mismatch — retry");
-        } else if (vrc == -4) {
-            snprintf(g_up.error, sizeof(g_up.error), "Size mismatch — retry");
-        } else {
-            snprintf(g_up.error, sizeof(g_up.error), "Verify failed (%d)", vrc);
-        }
-        g_up.state = UPD_ERROR;
-        g_thid = -1;
-        return 0;
+        storage_close(fd);
+        range = -1;
+    } else {
+        range = existing;
+        g_up.bytes = existing;
     }
 
-    if (storage_exists(g_final)) {
-        storage_remove(g_bak);
-        storage_rename(g_final, g_bak);
-    }
-    if (storage_temp_finalize(g_tmp, g_final) < 0) {
-        if (storage_exists(g_bak)) {
-            storage_rename(g_bak, g_final);
+    for (attempt = 0; attempt < 3; attempt++) {
+        g_up.state = UPD_DOWNLOADING;
+        if (attempt > 0) {
+            existing = storage_size(g_tmp);
+            range = existing > 1024 ? existing : -1;
+            sceKernelDelayThread(400000);
         }
-        strncpy(g_up.error, "Install failed", sizeof(g_up.error) - 1);
-        g_up.state = UPD_ERROR;
-        g_thid = -1;
-        return 0;
+        rc = http_get_file_range(
+            g_host,
+            g_port,
+            "/api/client/EBOOT.PBP",
+            g_tmp,
+            range,
+            progress_cb,
+            NULL,
+            &clen,
+            &total
+        );
+        if (g_cancel || rc == HTTP_ABORTED) {
+            return HTTP_ABORTED;
+        }
+        if (rc == HTTP_OK) {
+            return HTTP_OK;
+        }
+        {
+            const char *why = http_last_fail_reason();
+            if (why && strcmp(why, "file") == 0) {
+                strncpy(g_up.error, "Not enough storage", sizeof(g_up.error) - 1);
+                return HTTP_ERR;
+            }
+            if (why &&
+                (strcmp(why, "recv_timeout") == 0 ||
+                 strcmp(why, "trunc") == 0 ||
+                 strcmp(why, "tcp") == 0 ||
+                 strcmp(why, "recv") == 0) &&
+                attempt < 2) {
+                continue; /* keep partial file, Range resume */
+            }
+            strncpy(g_up.error, why && why[0] ? why : "download failed", sizeof(g_up.error) - 1);
+            return HTTP_ERR;
+        }
     }
+    strncpy(g_up.error, "Wi-Fi stall", sizeof(g_up.error) - 1);
+    return HTTP_ERR;
+}
 
-    storage_remove(g_bak);
-    storage_temp_discard(g_tmp);
-    paths_request_purge_update_companion();
-
+static void mark_complete(void) {
     g_up.percent = 100;
     g_up.state = UPD_COMPLETE;
     g_up.app_missing = 0;
@@ -683,6 +793,105 @@ static int update_thread(SceSize args, void *argp) {
     strncpy(g_up.current_version, g_up.remote_version, sizeof(g_up.current_version) - 1);
     dbg_log("U", "updater.c:done", "complete", "{}");
     g_thid = -1;
+}
+
+static int update_thread(SceSize args, void *argp) {
+    RamEboot ram;
+    int rc;
+    int vrc;
+    unsigned free_mem;
+    int cap;
+    (void)args;
+    (void)argp;
+
+    g_up.state = UPD_DOWNLOADING;
+    g_cancel = 0;
+    http_set_abort(0);
+    memset(&ram, 0, sizeof(ram));
+
+    cap = g_expected_size > 0 ? g_expected_size : (4 * 1024 * 1024);
+    if (cap < 64 * 1024) {
+        cap = 4 * 1024 * 1024;
+    }
+    if (cap > EBOOT_RAM_MAX) {
+        strncpy(g_up.error, "EBOOT too large", sizeof(g_up.error) - 1);
+        g_up.state = UPD_ERROR;
+        g_thid = -1;
+        return 0;
+    }
+
+    free_mem = (unsigned)sceKernelMaxFreeMemSize();
+    if (free_mem >= (unsigned)cap + 2u * 1024u * 1024u) {
+        ram.buf = (unsigned char *)malloc((size_t)cap);
+        ram.cap = cap;
+        ram.used = 0;
+    }
+
+    if (ram.buf) {
+        rc = download_to_ram(&ram);
+        if (rc == HTTP_ABORTED) {
+            free(ram.buf);
+            g_up.state = UPD_INCOMPLETE;
+            g_thid = -1;
+            return 0;
+        }
+        if (rc != HTTP_OK) {
+            free(ram.buf);
+            g_up.state = UPD_ERROR;
+            g_thid = -1;
+            return 0;
+        }
+        g_up.state = UPD_VERIFYING;
+        vrc = verify_eboot_mem(ram.buf, ram.used);
+        if (vrc != 0) {
+            free(ram.buf);
+            verify_fail_msg(vrc);
+            g_up.state = UPD_ERROR;
+            g_thid = -1;
+            return 0;
+        }
+        if (install_from_mem(ram.buf, ram.used) < 0) {
+            free(ram.buf);
+            strncpy(g_up.error, "Install failed", sizeof(g_up.error) - 1);
+            g_up.state = UPD_ERROR;
+            g_thid = -1;
+            return 0;
+        }
+        free(ram.buf);
+        paths_request_purge_update_companion();
+        mark_complete();
+        return 0;
+    }
+
+    rc = download_to_file_resume();
+    if (rc == HTTP_ABORTED) {
+        g_up.state = UPD_INCOMPLETE;
+        g_thid = -1;
+        return 0;
+    }
+    if (rc != HTTP_OK) {
+        g_up.state = UPD_ERROR;
+        g_thid = -1;
+        return 0;
+    }
+    g_up.state = UPD_VERIFYING;
+    vrc = verify_eboot(g_tmp);
+    if (vrc != 0) {
+        storage_temp_discard(g_tmp);
+        verify_fail_msg(vrc);
+        g_up.state = UPD_ERROR;
+        g_thid = -1;
+        return 0;
+    }
+    if (install_tmp_rename() < 0) {
+        strncpy(g_up.error, "Install failed", sizeof(g_up.error) - 1);
+        g_up.state = UPD_ERROR;
+        g_thid = -1;
+        return 0;
+    }
+    storage_temp_discard(g_tmp);
+    paths_request_purge_update_companion();
+    mark_complete();
     return 0;
 }
 
