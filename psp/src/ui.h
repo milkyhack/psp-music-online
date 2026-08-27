@@ -84,6 +84,8 @@ typedef struct {
     int dl_percent;
     float dl_speed_bps;
     const char *dl_name;
+    /* 0 = full meta, 1 = compact, 2 = viz-focus (CoverFlow / LightMP3 density) */
+    int info_density;
 } UiNowPlaying;
 
 typedef struct {
@@ -168,6 +170,20 @@ void ui_draw_appearance(
     const char *artist_hint,
     int playing
 );
+
+/* Album Theater carousel (Cover Flow style). */
+void ui_draw_coverflow(
+    const char *title,
+    const char **labels,
+    const int *track_ids,
+    int count,
+    int cursor,
+    int playing,
+    const UiMiniPlayer *mini
+);
+
+/* Contextual controls map (LightMP3 L+R). */
+void ui_draw_help_overlay(const char *screen_name, const char *body);
 
 void ui_set_debug(const char *line1, const char *line2);
 void ui_draw_debug_overlay(void);

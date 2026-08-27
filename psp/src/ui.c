@@ -509,47 +509,48 @@ static void np_draw_download(int x, int y, int w, const UiNowPlaying *np, const 
 
 static void np_draw_cover_hero(const UiNowPlaying *np, const PlayerTheme *th) {
     int has_cover = np->cover && np->cover->ready;
-    /* Lane y=40..184: 144×144 square, no soft halo (Adrenaline 2× sharp). */
-    const int cx = 16;
-    const int cy = 40;
-    const int cs = 144;
-    const int inset = 4;
+    /* 1:1 with UI_COVER_SIZE (160) — no upscale mush. Premium bezel, no carnival. */
+    const int cx = 12;
+    const int cy = 38;
+    const int cs = 164;
+    const int inset = 2;
     const int art = cs - inset * 2;
 
     if (skin_is_neon(th)) {
         ui_gfx_round_fill(cx, cy, cs, cs, 4, th->chrome_lo);
-        ui_gfx_hairline_rect(cx, cy, cs, cs, th->accent, 255);
+        ui_gfx_hairline_rect(cx, cy, cs, cs, th->accent, 220);
         ui_gfx_fill(cx + inset, cy + inset, art, art, th->bg);
         if (has_cover) {
-            ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 0);
+            ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 1);
         } else {
             ui_gpu_blit_atlas_cpu(
                 g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, cx + inset, cy + inset, art, art, 0xFFFFFFFFu
             );
         }
-        ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 90);
+        ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 70);
         return;
     }
-    ui_gfx_round_fill(cx + 2, cy + 4, cs, cs, 10, UI_RGB(0, 0, 0));
-    ui_gfx_round_fill(cx, cy, cs, cs, 10, th->chrome_lo);
-    ui_gfx_hairline_rect(cx, cy, cs, cs, th->chrome_hi, 90);
+    /* Smoked well + single specular edge (exhibition object). */
+    ui_gfx_round_fill(cx + 2, cy + 3, cs, cs, 6, UI_RGB(0, 0, 0));
+    ui_gfx_round_fill(cx, cy, cs, cs, 6, th->chrome_lo);
+    ui_gfx_hairline_rect(cx, cy, cs, cs, th->chrome_hi, 110);
     ui_gfx_round_fill(
-        cx + 2,
-        cy + 2,
-        cs - 4,
-        cs - 4,
-        9,
+        cx + 1,
+        cy + 1,
+        cs - 2,
+        cs - 2,
+        5,
         th->surface_elevated ? th->surface_elevated : th->card
     );
     if (has_cover) {
-        ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 0);
+        ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 1);
     } else {
         ui_gpu_blit_atlas_cpu(
             g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, cx + inset, cy + inset, art, art, 0xFFFFFFFFu
         );
     }
-    ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 36);
-    ui_gfx_hairline_rect(cx + inset + 1, cy + inset + 1, art - 2, art - 2, th->accent, 22);
+    ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 40);
+    ui_gfx_hairline_rect(cx + 1, cy + 1, cs - 2, 1, th->chrome_hi, 90);
 }
 
 /* Real queue list — every visible row is a real track */
@@ -856,45 +857,51 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
     }
     np_draw_status_pills(np, th);
 
-    /* One viz band only — no duplicate PLAYING signal card. */
-    viz_draw(176, 124, 288, 44, np->playing && !np->paused, th);
+    /* Density: 0 full, 1 compact (no viz), 2 viz-focus (big viz, less meta). */
+    if (np->info_density == 2) {
+        viz_draw(176, 108, 288, 72, np->playing && !np->paused, th);
+    } else if (np->info_density != 1) {
+        viz_draw(176, 124, 288, 44, np->playing && !np->paused, th);
+    }
 
-    /* One meta line under cover / viz. */
-    fmt = np->format_name && np->format_name[0] ? np->format_name : "—";
-    if (np->buffer_state == 7 /* NETWORK_LOST */ ||
-        (np->buffering && np->buffered_sec < 2.0f && np->dl_bytes > 0 && !np->playing)) {
-        snprintf(meta, sizeof(meta), "Reconnecting...");
-        ui_font_text_clip(16, 188, 200, th->warning ? th->warning : th->seek, meta, UI_FONT_SM);
-    } else if (np->lossless) {
-        snprintf(
-            meta,
-            sizeof(meta),
-            "%s %s %dk/%db",
-            np->online ? "ON" : "OFF",
-            fmt,
-            np->sample_khz > 0 ? np->sample_khz : 44,
-            np->bit_depth > 0 ? np->bit_depth : 16
-        );
-        ui_font_text_clip(16, 188, 200, th->muted, meta, UI_FONT_SM);
-    } else {
-        if (np->bitrate_kbps > 0) {
+    if (np->info_density != 2) {
+        /* One meta line under cover / viz. */
+        fmt = np->format_name && np->format_name[0] ? np->format_name : "—";
+        if (np->buffer_state == 7 /* NETWORK_LOST */ ||
+            (np->buffering && np->buffered_sec < 2.0f && np->dl_bytes > 0 && !np->playing)) {
+            snprintf(meta, sizeof(meta), "Reconnecting...");
+            ui_font_text_clip(16, 188, 200, th->warning ? th->warning : th->seek, meta, UI_FONT_SM);
+        } else if (np->lossless) {
             snprintf(
                 meta,
                 sizeof(meta),
-                "%s %s %dk",
+                "%s %s %dk/%db",
                 np->online ? "ON" : "OFF",
                 fmt,
-                np->bitrate_kbps
+                np->sample_khz > 0 ? np->sample_khz : 44,
+                np->bit_depth > 0 ? np->bit_depth : 16
             );
+            ui_font_text_clip(16, 188, 200, th->muted, meta, UI_FONT_SM);
         } else {
-            snprintf(meta, sizeof(meta), "%s %s", np->online ? "ON" : "OFF", fmt);
+            if (np->bitrate_kbps > 0) {
+                snprintf(
+                    meta,
+                    sizeof(meta),
+                    "%s %s %dk",
+                    np->online ? "ON" : "OFF",
+                    fmt,
+                    np->bitrate_kbps
+                );
+            } else {
+                snprintf(meta, sizeof(meta), "%s %s", np->online ? "ON" : "OFF", fmt);
+            }
+            ui_font_text_clip(16, 188, 200, th->muted, meta, UI_FONT_SM);
         }
-        ui_font_text_clip(16, 188, 200, th->muted, meta, UI_FONT_SM);
-    }
-    if (np->buffered_sec > 0.5f && np->online) {
-        char bufsec[24];
-        snprintf(bufsec, sizeof(bufsec), "buf %.0fs", np->buffered_sec);
-        ui_font_text_clip(220, 188, 100, th->lcd_dim, bufsec, UI_FONT_SM);
+        if (np->buffered_sec > 0.5f && np->online) {
+            char bufsec[24];
+            snprintf(bufsec, sizeof(bufsec), "buf %.0fs", np->buffered_sec);
+            ui_font_text_clip(220, 188, 100, th->lcd_dim, bufsec, UI_FONT_SM);
+        }
     }
 
     /* Scrubber exclusive lane. */
@@ -916,9 +923,102 @@ static void np_comp_modern(const UiNowPlaying *np, const PlayerTheme *th) {
     }
 }
 
+static void np_comp_coverflow(const UiNowPlaying *np, const PlayerTheme *th) {
+    char title[96];
+    char artist[96];
+    char elbuf[12];
+    char durbuf[12];
+    int el, dur;
+    int cx = 160;
+    int cy = 36;
+    int cs = 160;
+    int inset = 2;
+    int art = cs - inset * 2;
+    int has = np->cover && np->cover->ready;
+    int i;
+
+    np_ascii(title, sizeof(title), np->title);
+    np_ascii(artist, sizeof(artist), np->artist);
+    if (!title[0]) {
+        snprintf(title, sizeof(title), "Unknown Track");
+    }
+
+    ui_clear(th->bg);
+    ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+    ui_font_text(16, 8, th->text, "Album Theater", UI_FONT_MD);
+    ui_font_text(200, 10, th->muted, "Cover Flow", UI_FONT_SM);
+
+    /* Side peeks — queue neighbors as depth cards (no carnival motion). */
+    for (i = -2; i <= 2; i++) {
+        int idx;
+        int slot_w;
+        int slot_h;
+        int sx;
+        int sy;
+        const UiCover *c = NULL;
+        if (i == 0) {
+            continue;
+        }
+        idx = np->queue_index + i;
+        if (idx < 0 || idx >= np->queue_count) {
+            continue;
+        }
+        slot_w = (i == -1 || i == 1) ? 72 : 48;
+        slot_h = (i == -1 || i == 1) ? 96 : 64;
+        sx = cx + cs / 2 + i * 78 - slot_w / 2;
+        sy = cy + (cs - slot_h) / 2 + (i < 0 ? 8 : 8);
+        if (sx < 4 || sx + slot_w > UI_SCREEN_W - 4) {
+            continue;
+        }
+        ui_gfx_round_fill(sx, sy, slot_w, slot_h, 4, th->chrome_lo);
+        ui_gfx_fill_alpha(sx, sy, slot_w, slot_h, UI_RGB(0, 0, 0), 90);
+        ui_gfx_hairline_rect(sx, sy, slot_w, slot_h, th->chrome_hi, 50);
+        (void)c;
+    }
+
+    /* Hero cover well */
+    ui_gfx_round_fill(cx + 2, cy + 3, cs, cs, 6, UI_RGB(0, 0, 0));
+    ui_gfx_round_fill(cx, cy, cs, cs, 6, th->chrome_lo);
+    ui_gfx_hairline_rect(cx, cy, cs, cs, th->chrome_hi, 120);
+    if (has) {
+        ui_image_draw_cover_ex(cx + inset, cy + inset, art, art, np->cover, 1);
+    } else {
+        ui_gpu_blit_atlas_cpu(
+            g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, cx + inset, cy + inset, art, art, 0xFFFFFFFFu
+        );
+    }
+    ui_gfx_hairline_rect(cx + inset, cy + inset, art, art, th->text, 36);
+
+    ui_font_text_marquee(16, 208, 320, th->text, title, UI_FONT_MD);
+    ui_font_text_clip(16, 226, 280, th->muted, artist[0] ? artist : "-", UI_FONT_SM);
+
+    el = np->elapsed_ms / 1000;
+    dur = np->duration_ms / 1000;
+    if (el < 0) {
+        el = 0;
+    }
+    if (dur < 0) {
+        dur = 0;
+    }
+    snprintf(elbuf, sizeof(elbuf), "%d:%02d", el / 60, el % 60);
+    snprintf(durbuf, sizeof(durbuf), "%d:%02d", dur / 60, dur % 60);
+    ui_font_text(340, 208, th->text, elbuf, UI_FONT_SM);
+    ui_font_text(400, 208, th->muted, durbuf, UI_FONT_SM);
+    np_draw_progress(340, 226, 124, 4, np->elapsed_ms, np->duration_ms, th);
+    np_draw_transport(200, np, th);
+
+    if (np->queue_focus) {
+        np_draw_queue(60, 20, 360, 200, np, th, 0);
+    }
+}
+
 static void np_draw_skin(const UiNowPlaying *np, const PlayerTheme *th) {
     ui_eq_step(np->playing && !np->paused);
-    np_comp_modern(np, th);
+    if (th->composition == COMP_COVERFLOW) {
+        np_comp_coverflow(np, th);
+    } else {
+        np_comp_modern(np, th);
+    }
 }
 
 void ui_set_loading(int on) {
@@ -1228,11 +1328,137 @@ void ui_draw_library_ex(
         ui_font_text(156, mid_y + 20, th->lcd_dim, "O = Back", UI_FONT_SM);
     }
 
+    /* LightMP3-style dwell: after ~0.5s on a row, show a larger cover preview. */
+    if (show_thumbs && count > 0 && cursor >= 0 && cursor < count) {
+        static int s_dwell_cursor = -1;
+        static unsigned s_dwell_t0 = 0;
+        unsigned now = sceKernelGetSystemTimeLow();
+        if (cursor != s_dwell_cursor) {
+            s_dwell_cursor = cursor;
+            s_dwell_t0 = now;
+        } else if ((now - s_dwell_t0) > 500000u) {
+            const UiCover *c = ui_image_cover_for(track_ids[cursor]);
+            int pw = 96;
+            int ph = 96;
+            int px = UI_SCREEN_W - pw - 12;
+            int py = top + 8;
+            ui_gfx_fill_alpha(px - 4, py - 4, pw + 8, ph + 8, UI_RGB(0, 0, 0), 140);
+            ui_gfx_round_fill(px - 2, py - 2, pw + 4, ph + 4, 4, th->chrome_lo);
+            ui_gfx_hairline_rect(px - 2, py - 2, pw + 4, ph + 4, th->chrome_hi, 100);
+            if (c && c->ready) {
+                ui_image_draw_cover(px, py, pw, ph, c);
+            } else {
+                ui_gpu_blit_atlas_cpu(g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, px, py, pw, ph, 0xFFFFFFFFu);
+            }
+            ui_gfx_hairline_rect(px, py, pw, ph, th->accent, 50);
+        }
+    }
+
     if (mini && mini->now_title && mini->now_title[0]) {
         ui_draw_mini_player(mini, th);
     } else if (show_footer && neon) {
         ui_draw_footer_hints("Select", "Back");
     }
+}
+
+void ui_draw_coverflow(
+    const char *title,
+    const char **labels,
+    const int *track_ids,
+    int count,
+    int cursor,
+    int playing,
+    const UiMiniPlayer *mini
+) {
+    const PlayerTheme *th = theme_active();
+    int i;
+    int footer_h = (mini && mini->now_title && mini->now_title[0]) ? 48 : 0;
+    char name[96];
+
+    (void)playing;
+    ui_clear(th->bg);
+    ui_gfx_grad_v(0, 0, UI_SCREEN_W, UI_SCREEN_H, th->header, th->bg);
+    ui_draw_header(title ? title : "Albums", playing);
+
+    /* Reflective floor strip */
+    ui_gfx_fill_alpha(0, 200, UI_SCREEN_W, 24, th->chrome_lo, 90);
+
+    for (i = -2; i <= 2; i++) {
+        int idx = cursor + i;
+        int w, h, x, y;
+        const UiCover *c;
+        if (idx < 0 || idx >= count) {
+            continue;
+        }
+        if (i == 0) {
+            w = 148;
+            h = 148;
+            x = (UI_SCREEN_W - w) / 2;
+            y = 48;
+        } else if (i == -1 || i == 1) {
+            w = 88;
+            h = 110;
+            x = (UI_SCREEN_W / 2) + i * 118 - w / 2;
+            y = 72;
+        } else {
+            w = 56;
+            h = 72;
+            x = (UI_SCREEN_W / 2) + i * 118 - w / 2;
+            y = 92;
+        }
+        if (x < 4) {
+            x = 4;
+        }
+        if (x + w > UI_SCREEN_W - 4) {
+            x = UI_SCREEN_W - 4 - w;
+        }
+        ui_gfx_round_fill(x + 2, y + 3, w, h, 4, UI_RGB(0, 0, 0));
+        ui_gfx_round_fill(x, y, w, h, 4, th->chrome_lo);
+        ui_gfx_hairline_rect(x, y, w, h, i == 0 ? th->accent : th->chrome_hi, i == 0 ? 200 : 70);
+        c = (track_ids) ? ui_image_cover_for(track_ids[idx]) : NULL;
+        if (c && c->ready) {
+            ui_image_draw_cover(x + 2, y + 2, w - 4, h - 4, c);
+        } else {
+            ui_gpu_blit_atlas_cpu(
+                g_draw, BUF_WIDTH, UI_ATLAS_FALLBACK, x + 2, y + 2, w - 4, h - 4, 0xFFFFFFFFu
+            );
+        }
+        if (i != 0) {
+            ui_gfx_fill_alpha(x, y, w, h, UI_RGB(0, 0, 0), 70);
+        }
+    }
+
+    name[0] = '\0';
+    if (labels && cursor >= 0 && cursor < count && labels[cursor]) {
+        int n = 0;
+        while (labels[cursor][n] && n < 95) {
+            unsigned char ch = (unsigned char)labels[cursor][n];
+            name[n] = (ch >= 32 && ch < 127) ? (char)ch : ' ';
+            n++;
+        }
+        name[n] = '\0';
+    }
+    ui_font_text_marquee(24, 204 - (footer_h ? 4 : 0), 432, th->text, name[0] ? name : "-", UI_FONT_MD);
+    ui_font_text(24, 222 - (footer_h ? 4 : 0), th->muted, "L/R or D-Pad  X open  O back", UI_FONT_SM);
+
+    if (mini && mini->now_title && mini->now_title[0]) {
+        ui_draw_mini_player(mini, th);
+    }
+}
+
+void ui_draw_help_overlay(const char *screen_name, const char *body) {
+    const PlayerTheme *th = theme_active();
+    ui_gfx_fill_alpha(0, 0, UI_SCREEN_W, UI_SCREEN_H, UI_RGB(0, 0, 0), 170);
+    ui_gfx_glass(24, 28, UI_SCREEN_W - 48, UI_SCREEN_H - 56, 8, th->panel, th->chrome_hi, 240);
+    ui_gfx_fill_alpha(40, 44, 48, 2, th->accent, 220);
+    ui_font_text(40, 48, th->text, "Controls", UI_FONT_MD);
+    if (screen_name && screen_name[0]) {
+        ui_font_text_clip(140, 50, 280, th->muted, screen_name, UI_FONT_SM);
+    }
+    if (body && body[0]) {
+        ui_font_text_clip(40, 78, UI_SCREEN_W - 88, th->text, body, UI_FONT_SM);
+    }
+    ui_font_text(40, UI_SCREEN_H - 48, th->muted, "L+R close", UI_FONT_SM);
 }
 
 void ui_draw_now_playing(const UiNowPlaying *np) {

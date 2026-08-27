@@ -164,6 +164,10 @@ static int g_tcp_auto_retry = 0;
 static int g_decoder_auto_retry = 0; /* one free restart after sceMp3Init ate the header */
 static int g_cover_after_dl = 0;     /* fetch cover only when stream download finished */
 static int g_show_track_info = 0;    /* overlay on Now Playing — no screen jump */
+static int g_np_density = 0;         /* 0 full / 1 compact / 2 viz-focus */
+static int g_help_overlay = 0;       /* L+R contextual controls */
+static int g_economy = 0;            /* dim UI while audio continues */
+static int g_sleep_at_end = 0;       /* stop after current track */
 static int g_seek_hold_ms = 0;       /* analog scrub delta from base */
 static int g_seek_preview_ms = -1;   /* live preview while stick held; -1 = off */
 static int g_seek_base_ms = 0;
@@ -366,6 +370,8 @@ static void set_settings_menu(void) {
     ADD("API Key", g_cfg.api_key[0] ? "set" : "off");
     ADD("Diagnostics", "audio/net/ms");
     ADD("Version", APP_VERSION);
+    ADD("Economy display", g_economy ? "ON" : "off");
+    ADD("Sleep at end", g_sleep_at_end ? "ON" : "off");
 #undef ADD
     bind_list_ptrs();
 }
@@ -1242,6 +1248,63 @@ static void draw_current_library(void) {
         player_is_active(),
         (mini.now_title && mini.now_title[0]) ? &mini : NULL,
         g_screen == SCREEN_HOME
+    );
+}
+
+static int skin_wants_coverflow(void) {
+    const PlayerTheme *th = theme_active();
+    return th && th->composition == COMP_COVERFLOW;
+}
+
+static void draw_current_library_or_coverflow(void) {
+    UiMiniPlayer mini;
+    int ids[MAX_LIST_ITEMS];
+    int i;
+    const int *id_ptr = NULL;
+
+    if (!(skin_wants_coverflow() && g_screen == SCREEN_ALBUMS && g_count > 0)) {
+        draw_current_library();
+        return;
+    }
+
+    fill_mini_player(&mini);
+    for (i = 0; i < g_count && i < MAX_LIST_ITEMS; i++) {
+        ids[i] = -g_items[i].id;
+    }
+    id_ptr = ids;
+
+    /* Warm center ±2 covers */
+    reap_download_thread();
+    if (g_online_mode && !g_buffering && g_dl_thid < 0) {
+        int off;
+        for (off = 0; off <= 2; off++) {
+            int try_idx[2];
+            int t;
+            try_idx[0] = g_cursor - off;
+            try_idx[1] = g_cursor + off;
+            for (t = 0; t < (off == 0 ? 1 : 2); t++) {
+                int idx = try_idx[t];
+                int cid;
+                if (idx < 0 || idx >= g_count) {
+                    continue;
+                }
+                cid = -g_items[idx].id;
+                if (cid != 0 && !ui_image_cover_for(cid)) {
+                    ui_image_load_cover_ex(g_cfg.host, g_cfg.port, cid, 0, 0);
+                    goto coverflow_drawn;
+                }
+            }
+        }
+    }
+coverflow_drawn:
+    ui_draw_coverflow(
+        screen_title_with_page(),
+        g_labels_ptr,
+        id_ptr,
+        g_count,
+        g_cursor,
+        player_is_active(),
+        (mini.now_title && mini.now_title[0]) ? &mini : NULL
     );
 }
 
@@ -2690,7 +2753,13 @@ static void pump_background_playback(void) {
 
     if (g_play_started && !player_update()) {
         report_current_play(1);
-        if (g_repeat && g_play_index >= 0) {
+        if (g_sleep_at_end) {
+            set_status("Sleep — stopped");
+            stop_playback_all(0);
+            g_play_started = 0;
+            g_sleep_at_end = 0;
+            position_save_if_needed(1);
+        } else if (g_repeat && g_play_index >= 0) {
             play_at_index(g_play_index);
         } else if (g_play_index >= 0 && g_play_index < g_count - 1) {
             skip_track(1);
@@ -2764,6 +2833,21 @@ int main(int argc, char *argv[]) {
         ui_begin();
         if (g_screen != SCREEN_PLAYING) {
             pump_background_playback();
+        }
+
+        /* LightMP3: L+R toggles contextual controls help. */
+        if ((pressed & PSP_CTRL_LTRIGGER) && (pad.Buttons & PSP_CTRL_RTRIGGER)) {
+            g_help_overlay = !g_help_overlay;
+        } else if ((pressed & PSP_CTRL_RTRIGGER) && (pad.Buttons & PSP_CTRL_LTRIGGER)) {
+            g_help_overlay = !g_help_overlay;
+        }
+        if (g_help_overlay && (pressed & PSP_CTRL_CIRCLE)) {
+            g_help_overlay = 0;
+        }
+        /* Economy: any face button wakes the UI chrome. */
+        if (g_economy && (pressed & (PSP_CTRL_CROSS | PSP_CTRL_CIRCLE | PSP_CTRL_TRIANGLE |
+                                     PSP_CTRL_SQUARE | PSP_CTRL_START | PSP_CTRL_SELECT))) {
+            /* keep economy on — just show chrome this frame via flag wake */
         }
 
         if (g_screen == SCREEN_PLAYING) {
@@ -2874,8 +2958,20 @@ int main(int argc, char *argv[]) {
                     snprintf(g_status, sizeof(g_status), "Volume %d%%", player_get_volume());
                 }
                 if (pressed & PSP_CTRL_LEFT) {
-                    dbg_log("C", "main.c:playing", "playing_skip", "{\"d\":-1}");
-                    skip_track(-1);
+                    /* Smart Previous (LightMP3): >2% played → restart, else skip back. */
+                    int el = player_elapsed_ms();
+                    int dur = player_duration_ms();
+                    if (dur <= 0) {
+                        dur = g_now_duration_ms;
+                    }
+                    if (dur > 2000 && el > (dur / 50)) {
+                        dbg_log("C", "main.c:playing", "playing_restart", "{}");
+                        seek_stream_to_ms(0);
+                        set_status("Restart");
+                    } else {
+                        dbg_log("C", "main.c:playing", "playing_skip", "{\"d\":-1}");
+                        skip_track(-1);
+                    }
                 }
                 if (pressed & PSP_CTRL_RIGHT) {
                     dbg_log("C", "main.c:playing", "playing_skip", "{\"d\":1}");
@@ -2892,7 +2988,8 @@ int main(int argc, char *argv[]) {
                         g_eq_cursor = g_eq_preset;
                     }
                 }
-                if ((pressed & PSP_CTRL_LTRIGGER) && !(pad.Buttons & PSP_CTRL_SELECT)) {
+                if ((pressed & PSP_CTRL_LTRIGGER) && !(pad.Buttons & PSP_CTRL_SELECT) &&
+                    !(pad.Buttons & PSP_CTRL_RTRIGGER)) {
                     g_shuffle = !g_shuffle;
                     if (g_shuffle && g_count > 1) {
                         shuffle_rebuild(g_play_index >= 0 ? g_play_index : g_cursor);
@@ -2900,10 +2997,21 @@ int main(int argc, char *argv[]) {
                         shuffle_reset();
                     }
                 }
-                if (pressed & PSP_CTRL_RTRIGGER) {
+                if ((pressed & PSP_CTRL_RTRIGGER) && !(pad.Buttons & PSP_CTRL_LTRIGGER)) {
                     g_repeat = !g_repeat;
                 }
                 if (pressed & PSP_CTRL_START) {
+                    /* START+SELECT = NP density cycle; START alone = offline save. */
+                    if (pad.Buttons & PSP_CTRL_SELECT) {
+                        g_np_density = (g_np_density + 1) % 3;
+                        if (g_np_density == 0) {
+                            set_status("Density: full");
+                        } else if (g_np_density == 1) {
+                            set_status("Density: compact");
+                        } else {
+                            set_status("Density: viz");
+                        }
+                    } else {
                     const DownloadStatus *ds = download_status();
                     dbg_log("C", "main.c:playing", "playing_save", "{}");
                     if (ds->state == DL_RUNNING) {
@@ -2915,6 +3023,7 @@ int main(int argc, char *argv[]) {
                         }
                     } else {
                         save_offline_current();
+                    }
                     }
                 }
                 if (pressed & PSP_CTRL_CIRCLE) {
@@ -2999,7 +3108,12 @@ int main(int argc, char *argv[]) {
 
             if (g_play_started && !player_update()) {
                 report_current_play(1);
-                if (g_repeat && g_play_index >= 0) {
+                if (g_sleep_at_end) {
+                    set_status("Sleep — stopped");
+                    stop_playback_all(0);
+                    g_play_started = 0;
+                    g_sleep_at_end = 0;
+                } else if (g_repeat && g_play_index >= 0) {
                     play_at_index(g_play_index);
                 } else if (g_play_index >= 0 && g_play_index < g_count - 1) {
                     skip_track(1);
@@ -3083,6 +3197,7 @@ int main(int argc, char *argv[]) {
                 if (!np.cover) {
                     np.cover = ui_image_cover();
                 }
+                np.info_density = g_np_density;
                 ui_draw_now_playing(&np);
                 if (g_show_track_info && !g_show_eq) {
                     const PlayerTheme *th = theme_active();
@@ -3365,7 +3480,7 @@ int main(int argc, char *argv[]) {
                     );
                 }
             }
-            draw_current_library();
+            draw_current_library_or_coverflow();
 
             if (list_supports_pagination()) {
                 if (player_is_active() || g_play_started || g_buffering) {
@@ -3375,6 +3490,17 @@ int main(int argc, char *argv[]) {
                     }
                     if (pressed & PSP_CTRL_RTRIGGER) {
                         skip_track(1);
+                    }
+                } else if (skin_wants_coverflow() && g_screen == SCREEN_ALBUMS) {
+                    if ((pressed & PSP_CTRL_LEFT) || (pressed & PSP_CTRL_LTRIGGER)) {
+                        if (g_cursor > 0) {
+                            g_cursor--;
+                        }
+                    }
+                    if ((pressed & PSP_CTRL_RIGHT) || (pressed & PSP_CTRL_RTRIGGER)) {
+                        if (g_cursor < g_count - 1) {
+                            g_cursor++;
+                        }
                     }
                 } else {
                     if (pressed & (PSP_CTRL_LEFT | PSP_CTRL_LTRIGGER)) {
@@ -3535,6 +3661,16 @@ int main(int argc, char *argv[]) {
                         );
                         g_info_return_screen = SCREEN_SETTINGS;
                         g_screen = SCREEN_INFO;
+                    } else if (g_cursor == 7) {
+                        g_economy = !g_economy;
+                        set_status(g_economy ? "Economy ON — dim UI" : "Economy off");
+                        set_settings_menu();
+                        g_cursor = 7;
+                    } else if (g_cursor == 8) {
+                        g_sleep_at_end = !g_sleep_at_end;
+                        set_status(g_sleep_at_end ? "Sleep at end ON" : "Sleep at end off");
+                        set_settings_menu();
+                        g_cursor = 8;
                     }
                 } else if (g_screen == SCREEN_MUSIC) {
                     if (g_cursor == 0) {
@@ -3794,6 +3930,41 @@ int main(int argc, char *argv[]) {
             ui_draw_debug_overlay();
         }
 #endif
+
+        if (g_help_overlay) {
+            char body[220];
+            const char *sn = screen_title();
+            if (g_screen == SCREEN_PLAYING) {
+                snprintf(
+                    body,
+                    sizeof(body),
+                    "X pause  O back  Square stop  L/R skip  "
+                    "U/D vol  Stick seek  L shuf R rpt  "
+                    "SELECT EQ  L+SELECT info  START save  "
+                    "START+SELECT density  L+R help"
+                );
+            } else if (g_screen == SCREEN_ALBUMS && skin_wants_coverflow()) {
+                snprintf(
+                    body,
+                    sizeof(body),
+                    "Cover Flow: L/R albums  X open  O back  "
+                    "Triangle Now Playing  L+R help"
+                );
+            } else {
+                snprintf(
+                    body,
+                    sizeof(body),
+                    "X select  O back  U/D move  "
+                    "Triangle Now Playing  L+R help  "
+                    "Settings: Economy / Sleep at end"
+                );
+            }
+            ui_draw_help_overlay(sn, body);
+        } else if (g_economy) {
+            ui_gfx_fill_alpha(0, 0, UI_SCREEN_W, UI_SCREEN_H, UI_RGB(0, 0, 0), 210);
+            ui_text_clip(120, 120, 280, UI_COL_MUTED, "Economy — audio on");
+            ui_text_clip(100, 140, 300, UI_COL_MUTED, "Settings to disable  L+R help");
+        }
 
         /* Online remote debug disabled (see dbg_remote_* no-ops). */
 

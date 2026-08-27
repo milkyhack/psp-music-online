@@ -209,18 +209,24 @@ UiGpuTex *ui_gpu_labels(void) {
     return &g_labels;
 }
 
-int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels_96, int track_id) {
-    int tw = 128;
-    int th = 128;
-    int cover_n = 128;
+int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels, int content_n, int track_id) {
+    int tw = 256;
+    int th = 256;
     int y;
     u32 *dst;
     (void)track_id;
 
-    if (!tex || !pixels_96) {
+    if (!tex || !pixels || content_n <= 0) {
         return -1;
     }
-    if (!tex->data) {
+    if (content_n > tw) {
+        content_n = tw;
+    }
+    if (!tex->data || tex->width != tw || tex->height != th) {
+        if (tex->data) {
+            free(tex->data);
+            tex->data = NULL;
+        }
         tex->data = aligned_rgba(tw, th);
         if (!tex->data) {
             return -1;
@@ -231,10 +237,12 @@ int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels_96, int track_id) {
     }
     dst = (u32 *)tex->data;
     memset(dst, 0, (size_t)tw * (size_t)th * 4u);
-    for (y = 0; y < cover_n && y < th; y++) {
-        memcpy(dst + y * tw, pixels_96 + y * cover_n, (size_t)cover_n * 4u);
+    for (y = 0; y < content_n; y++) {
+        memcpy(dst + y * tw, pixels + y * content_n, (size_t)content_n * 4u);
     }
     sceKernelDcacheWritebackInvalidateRange(tex->data, (unsigned)(tw * th * 4));
+    tex->content_w = content_n;
+    tex->content_h = content_n;
     tex->ready = 1;
     return 0;
 }
@@ -327,15 +335,17 @@ void ui_gpu_present(
     sceGuTexSync();
 
     if (cover && cover->ready && cover_w > 0 && cover_h > 0) {
-        /* NEAREST keeps album art sharp when upscaling 128→~152; LINEAR looked mushy. */
+        float eu = (float)(cover->content_w > 0 ? cover->content_w : cover->width);
+        float ev = (float)(cover->content_h > 0 ? cover->content_h : cover->height);
+        /* NEAREST keeps album art sharp; avoid LINEAR mush on Adrenaline 2×. */
         sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
         sceGuTexFilter(GU_NEAREST, GU_NEAREST);
         draw_tex_quad(
             cover,
             0,
             0,
-            128.0f,
-            128.0f,
+            eu,
+            ev,
             (float)cover_x,
             (float)cover_y,
             (float)cover_w,

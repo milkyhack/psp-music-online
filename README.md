@@ -26,6 +26,16 @@ LAN only. Same Wi‑Fi. No cloud.
 
 ### What's new
 
+**1.3.15**
+
+| Area | What it does |
+|------|----------------|
+| **Cover Flow** | New Appearance style: 3D album carousel (Album Theater). |
+| **Covers** | Sharper 160px art, cover-crop, premium frame (no upscale mush). |
+| **Controls** | **L+R** help overlay; smart Previous (restart if past 2%); **START+SELECT** density. |
+| **Power** | Settings: Economy display, Sleep at end of track. |
+| **Library** | Cover preview after a short dwell on a row. |
+
 **1.3.14**
 
 | Area | What it does |
@@ -44,7 +54,7 @@ LAN only. Same Wi‑Fi. No cloud.
 - **Browse & search** — artists, albums, tracks
 - **Offline** — save tracks to the Memory Stick, play without Wi‑Fi
 - **Music Updater** — separate XMB icon: install if missing, update if old
-- **Themes** — **Neon Terminal** (default) plus Midnight and more in Appearance
+- **Themes** — **Neon Terminal** (default), **Cover Flow**, Midnight and more in Appearance
 - **Admin UI** — `http://IP:8084/` for scan, cache, and diagnostics
 
 ### Screenshots
@@ -58,6 +68,10 @@ LAN only. Same Wi‑Fi. No cloud.
 <p align="center">
   <img src="docs/assets/now-playing.png" alt="Now Playing" width="360"/>
   &nbsp;
+  <img src="docs/assets/coverflow.png" alt="Cover Flow" width="360"/>
+</p>
+
+<p align="center">
   <img src="docs/assets/setup.png" alt="Setup" width="360"/>
 </p>
 
@@ -66,6 +80,7 @@ LAN only. Same Wi‑Fi. No cloud.
 | Home | [`docs/assets/home.png`](docs/assets/home.png) |
 | Library | [`docs/assets/library.png`](docs/assets/library.png) |
 | Now Playing | [`docs/assets/now-playing.png`](docs/assets/now-playing.png) |
+| Cover Flow | [`docs/assets/coverflow.png`](docs/assets/coverflow.png) |
 | Setup | [`docs/assets/setup.png`](docs/assets/setup.png) |
 
 ### Quick start (5 minutes)
@@ -147,9 +162,11 @@ Or on the PSP: **Setup IP/Port** → set octets → it saves automatically.
 | **D-pad L/R** | Now Playing | Skip track |
 | **D-pad U/D** | Now Playing | Volume |
 | **L / R** | Now Playing | Shuffle / Repeat |
+| **L + R** | Anywhere | Controls help overlay |
 | **SELECT** | Now Playing | Equalizer |
 | **L + SELECT** | Now Playing | Track info (then **□** rates) |
 | **START** | Now Playing | Save offline |
+| **START + SELECT** | Now Playing | Cycle info density |
 | **SELECT** | Setup | Edit IP / port |
 
 ### Music Updater
@@ -289,6 +306,16 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 
 ### Что нового
 
+**1.3.15**
+
+| Где | Что сделано |
+|-----|-------------|
+| **Cover Flow** | Новый стиль в Appearance: 3D‑карусель альбомов (Album Theater). |
+| **Обложки** | Четче 160px, cover-crop, аккуратная рамка (без размытия от upscale). |
+| **Управление** | **L+R** — подсказка; умный Previous (с начала, если >2%); **START+SELECT** — плотность UI. |
+| **Питание** | В настройках: Economy (тусклый UI) и Sleep at end. |
+| **Библиотека** | Крупный превью обложки после короткой паузы на строке. |
+
 **1.3.14**
 
 | Где | Что сделано |
@@ -307,7 +334,7 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 - **Просмотр и поиск** — артисты, альбомы, треки
 - **Офлайн** — скачивание на Memory Stick, затем без Wi‑Fi
 - **Music Updater** — отдельная иконка в XMB: установит, если нет / обновит, если устарело
-- **Темы** — по умолчанию **Neon Terminal**, плюс Midnight и другие в Appearance
+- **Темы** — по умолчанию **Neon Terminal**, плюс **Cover Flow**, Midnight и другие в Appearance
 - **Админка** — `http://IP:8084/` для сканирования, кэша и диагностики
 
 ### Скриншоты
@@ -321,6 +348,10 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 <p align="center">
   <img src="docs/assets/now-playing.png" alt="Now Playing" width="360"/>
   &nbsp;
+  <img src="docs/assets/coverflow.png" alt="Cover Flow" width="360"/>
+</p>
+
+<p align="center">
   <img src="docs/assets/setup.png" alt="Настройка" width="360"/>
 </p>
 
@@ -329,6 +360,7 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 | Главный экран | [`docs/assets/home.png`](docs/assets/home.png) |
 | Библиотека | [`docs/assets/library.png`](docs/assets/library.png) |
 | Now Playing | [`docs/assets/now-playing.png`](docs/assets/now-playing.png) |
+| Cover Flow | [`docs/assets/coverflow.png`](docs/assets/coverflow.png) |
 | Настройка | [`docs/assets/setup.png`](docs/assets/setup.png) |
 
 ### Быстрый старт (5 минут)
@@ -410,9 +442,11 @@ ms0:/PSP/GAME/PSPMUSICUPD/EBOOT.PBP   ← Music Updater
 | **D-pad L/R** | Now Playing | Предыдущий / следующий трек |
 | **D-pad U/D** | Now Playing | Громкость |
 | **L / R** | Now Playing | Shuffle / Repeat |
+| **L + R** | Везде | Подсказка по кнопкам |
 | **SELECT** | Now Playing | Эквалайзер |
 | **L + SELECT** | Now Playing | Инфо о треке (дальше **□** — оценка) |
 | **START** | Now Playing | Сохранить офлайн |
+| **START + SELECT** | Now Playing | Цикл плотности UI |
 | **SELECT** | Setup | Редактировать IP / порт |
 
 ### Music Updater

@@ -3,7 +3,7 @@
 
 #include <psptypes.h>
 
-#define SKIN_COUNT 15
+#define SKIN_COUNT 16
 #define THEME_COUNT SKIN_COUNT
 
 /* Visualizer modes — smooth reinterpretations of each theme language */
@@ -44,7 +44,8 @@ enum {
     COMP_PS2,
     COMP_XMB,
     COMP_DREAMCAST,
-    COMP_ARCADE
+    COMP_ARCADE,
+    COMP_COVERFLOW
 };
 
 enum {

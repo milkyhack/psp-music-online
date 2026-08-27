@@ -46,6 +46,8 @@ typedef struct {
     int width;
     int height;
     int stride; /* pixels per row (tbw) */
+    int content_w; /* valid cover pixels inside POT (e.g. 160 in 256) */
+    int content_h;
     int ready;
 } UiGpuTex;
 
@@ -59,8 +61,8 @@ UiGpuTex *ui_gpu_atlas(void);
 UiGpuTex *ui_gpu_font(void);
 UiGpuTex *ui_gpu_labels(void);
 
-/* Upload / replace a cover-sized texture (96x96 stored in 128x128). */
-int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels_96, int track_id);
+/* Upload cover pixels into a power-of-two texture (content_n × content_n). */
+int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels, int content_n, int track_id);
 void ui_gpu_free_tex(UiGpuTex *tex);
 
 /*

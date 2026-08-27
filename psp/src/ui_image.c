@@ -30,8 +30,11 @@ static struct {
 } g_fail[UI_COVER_FAIL_MAX];
 static unsigned g_fail_clock;
 
-/* Fit source into UI_COVER_SIZE square (contain / letterbox). */
-static void cover_fit_box(int src_w, int src_h, int *dw, int *dh, int *ox, int *oy) {
+/*
+ * Cover-crop into UI_COVER_SIZE square (fill, no letterbox bars).
+ * Slight center crop looks premium in a bezel; contain left grey mats.
+ */
+static void cover_crop_src(int src_w, int src_h, int *sx0, int *sy0, int *sw, int *sh) {
     if (src_w < 1) {
         src_w = 1;
     }
@@ -39,41 +42,37 @@ static void cover_fit_box(int src_w, int src_h, int *dw, int *dh, int *ox, int *
         src_h = 1;
     }
     if (src_w >= src_h) {
-        *dw = UI_COVER_SIZE;
-        *dh = (src_h * UI_COVER_SIZE) / src_w;
-        if (*dh < 1) {
-            *dh = 1;
-        }
+        *sh = src_h;
+        *sw = src_h;
+        *sx0 = (src_w - *sw) / 2;
+        *sy0 = 0;
     } else {
-        *dh = UI_COVER_SIZE;
-        *dw = (src_w * UI_COVER_SIZE) / src_h;
-        if (*dw < 1) {
-            *dw = 1;
-        }
+        *sw = src_w;
+        *sh = src_w;
+        *sx0 = 0;
+        *sy0 = (src_h - *sh) / 2;
     }
-    *ox = (UI_COVER_SIZE - *dw) / 2;
-    *oy = (UI_COVER_SIZE - *dh) / 2;
 }
 
 static void cover_blit_png_contain(png_bytep *rows, int width, int height, UiCover *out) {
-    int dw, dh, ox, oy, y, x;
-    cover_fit_box(width, height, &dw, &dh, &ox, &oy);
+    int sx0, sy0, sw, sh, y, x;
+    cover_crop_src(width, height, &sx0, &sy0, &sw, &sh);
     memset(out->pixels, 0, sizeof(out->pixels));
-    for (y = 0; y < dh; y++) {
-        int sy = (y * height) / dh;
+    for (y = 0; y < UI_COVER_SIZE; y++) {
+        int sy = sy0 + (y * sh) / UI_COVER_SIZE;
         png_bytep row;
         if (sy >= height) {
             sy = height - 1;
         }
         row = rows[sy];
-        for (x = 0; x < dw; x++) {
-            int sx = (x * width) / dw;
+        for (x = 0; x < UI_COVER_SIZE; x++) {
+            int sx = sx0 + (x * sw) / UI_COVER_SIZE;
             png_bytep p;
             if (sx >= width) {
                 sx = width - 1;
             }
             p = row + sx * 4;
-            out->pixels[(oy + y) * UI_COVER_SIZE + (ox + x)] =
+            out->pixels[y * UI_COVER_SIZE + x] =
                 0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
         }
     }
@@ -86,22 +85,22 @@ static void cover_blit_rgb_contain(
     int row_stride,
     UiCover *out
 ) {
-    int dw, dh, ox, oy, y, x;
-    cover_fit_box(width, height, &dw, &dh, &ox, &oy);
+    int sx0, sy0, sw, sh, y, x;
+    cover_crop_src(width, height, &sx0, &sy0, &sw, &sh);
     memset(out->pixels, 0, sizeof(out->pixels));
-    for (y = 0; y < dh; y++) {
-        int sy = (y * height) / dh;
+    for (y = 0; y < UI_COVER_SIZE; y++) {
+        int sy = sy0 + (y * sh) / UI_COVER_SIZE;
         if (sy >= height) {
             sy = height - 1;
         }
-        for (x = 0; x < dw; x++) {
-            int sx = (x * width) / dw;
+        for (x = 0; x < UI_COVER_SIZE; x++) {
+            int sx = sx0 + (x * sw) / UI_COVER_SIZE;
             const unsigned char *p;
             if (sx >= width) {
                 sx = width - 1;
             }
             p = rgb + sy * row_stride + sx * 3;
-            out->pixels[(oy + y) * UI_COVER_SIZE + (ox + x)] =
+            out->pixels[y * UI_COVER_SIZE + x] =
                 0xFF000000u | ((u32)p[2] << 16) | ((u32)p[1] << 8) | (u32)p[0];
         }
     }
@@ -358,7 +357,7 @@ static int decode_png_file(const char *path, UiCover *out, int track_id) {
     out->track_id = track_id;
     out->ready = 1;
     out->tick = ++g_tick;
-    ui_gpu_upload_cover(&out->gpu, out->pixels, track_id);
+    ui_gpu_upload_cover(&out->gpu, out->pixels, UI_COVER_SIZE, track_id);
     ok = 0;
     return ok;
 }
@@ -431,7 +430,7 @@ static int decode_bmp_file(const char *path, UiCover *out, int track_id) {
     out->track_id = track_id;
     out->ready = 1;
     out->tick = ++g_tick;
-    ui_gpu_upload_cover(&out->gpu, out->pixels, track_id);
+    ui_gpu_upload_cover(&out->gpu, out->pixels, UI_COVER_SIZE, track_id);
     return 0;
 }
 
@@ -704,7 +703,7 @@ static int decode_png_mem(const unsigned char *data, int len, UiCover *out, int 
     out->track_id = track_id;
     out->ready = 1;
     out->tick = ++g_tick;
-    ui_gpu_upload_cover(&out->gpu, out->pixels, track_id);
+    ui_gpu_upload_cover(&out->gpu, out->pixels, UI_COVER_SIZE, track_id);
     return 0;
 }
 
@@ -779,7 +778,7 @@ static int decode_jpeg_mem(const unsigned char *data, int len, UiCover *out, int
     out->track_id = track_id;
     out->ready = 1;
     out->tick = ++g_tick;
-    ui_gpu_upload_cover(&out->gpu, out->pixels, track_id);
+    ui_gpu_upload_cover(&out->gpu, out->pixels, UI_COVER_SIZE, track_id);
     return 0;
 }
 

@@ -604,11 +604,13 @@ def _thumbnail_response(path: Path, size: int, fmt: str) -> Response:
     try:
         with Image.open(path) as source:
             cover = source.convert("RGB")
-            cover.thumbnail((size, size), Image.Resampling.LANCZOS)
-            canvas = Image.new("RGB", (size, size), (20, 20, 24))
-            x = (size - cover.width) // 2
-            y = (size - cover.height) // 2
-            canvas.paste(cover, (x, y))
+            # Cover-crop to square (match PSP client) — no letterbox mats.
+            cw, ch = cover.size
+            side = min(cw, ch)
+            left = (cw - side) // 2
+            top = (ch - side) // 2
+            cover = cover.crop((left, top, left + side, top + side))
+            canvas = cover.resize((size, size), Image.Resampling.LANCZOS)
             output = BytesIO()
             if fmt == "bmp":
                 canvas.save(output, format="BMP")
@@ -628,7 +630,7 @@ def _thumbnail_response(path: Path, size: int, fmt: str) -> Response:
 @app.get("/api/covers/album/{album_id}/thumbnail")
 def cover_album_thumbnail(
     album_id: int,
-    size: int = Query(default=96, ge=32, le=192),
+    size: int = Query(default=160, ge=32, le=256),
     format: str = Query(default="png", pattern="^(png|bmp)$"),
     _: None = Depends(require_api_key),
 ) -> Response:
@@ -645,7 +647,7 @@ def cover_for_track(track_id: int, _: None = Depends(require_api_key)):
 @app.get("/api/covers/{track_id}/thumbnail")
 def cover_thumbnail(
     track_id: int,
-    size: int = Query(default=96, ge=32, le=192),
+    size: int = Query(default=160, ge=32, le=256),
     format: str = Query(default="png", pattern="^(png|bmp)$"),
     _: None = Depends(require_api_key),
 ) -> Response:
