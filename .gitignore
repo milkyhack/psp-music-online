@@ -24,6 +24,10 @@ psp/assets/SND0.AT3.bad132
 
 # Keep shared writing skill; ignore other Cursor local state
 dist-release/
+design/qa/reports/
+tools/ppsspp_qa/.venv/
+tools/ppsspp_qa/__pycache__/
+tools/ppsspp_bench/data/qa/
 
 # Cursor: ignore local state, keep shared skills/rules
 .cursor/*

@@ -14,6 +14,8 @@
 #include "ui.h"
 #include "ui_image.h"
 #include "ui_gpu.h"
+#include "ui_coverflow.h"
+#include "cf_trace.h"
 #include "ui_gfx.h"
 #include "ui_font.h"
 #include "offline.h"
@@ -26,6 +28,8 @@
 #include "download.h"
 #include "updater.h"
 #include "flac_dec.h"
+#include "ppsspp_qa.h"
+#include "ppsspp_qa_demo.h"
 
 #include <pspnet_apctl.h>
 
@@ -126,6 +130,8 @@ static int g_return_screen = SCREEN_TRACKS;
 static int g_home_np = -1;
 static int g_home_offline = 0;
 static int g_home_online = 1;
+static int g_online_tracks_hint = 0;
+static unsigned g_cf_remote_tick = 0;
 static int g_home_top = -1;
 static int g_home_wifi = -1;
 static int g_home_setup = -1;
@@ -177,6 +183,8 @@ static int g_play_reported = 0;      /* 1 after /api/plays for current track */
 static int g_seek_resume_ms = 0;     /* elapsed to show/apply after start_ms seek */
 static int g_pending_start_ms = 0;   /* start playback from this ms (server resume) */
 static int g_boot_update_mode = 0;   /* launched from PSPMUSICUPD companion */
+static int g_ppsspp_auto_pending = 0; /* PPSSPP bench: one-shot boot connect (ppsspp_auto.txt) */
+static int g_ppsspp_auto_delay = 0;    /* frames to wait before auto connect (PPSSPP stack) */
 static RingBuf *g_stream_ring = NULL;
 static PlayerCodec g_stream_codec = PLAYER_CODEC_MP3;
 static int g_stream_lossless = 0;
@@ -318,7 +326,8 @@ static void set_home_menu(void) {
     } while (0)
 
     /* Jump back to the live player without re-selecting a track. */
-    if (g_track_id > 0 || player_is_active() || g_buffering || g_play_started) {
+    if (!ppsspp_qa_demo_active() &&
+        (g_track_id > 0 || player_is_active() || g_buffering || g_play_started)) {
         char right[40];
         const char *t = g_now_title[0] ? g_now_title : "Playing";
         snprintf(right, sizeof(right), "%.18s", t);
@@ -338,12 +347,49 @@ static void set_home_menu(void) {
         g_home_offline = g_count;
         ADD("Offline Music", r, UI_ICON_NOTE);
     }
-    g_home_online = g_count;
-    ADD("Online Library", g_online_mode ? "ready" : (g_net_ok ? "no server" : "need WiFi"), UI_ICON_GLOBE);
-
-    g_home_settings = g_count;
-    ADD("Settings", "IP · theme · WiFi", UI_ICON_GEAR);
+    {
+        char r[32];
+        if (g_online_mode) {
+            if (g_online_tracks_hint > 0) {
+                snprintf(r, sizeof(r), "%d tracks", g_online_tracks_hint);
+            } else {
+                snprintf(r, sizeof(r), "ready");
+            }
+        } else if (g_net_ok) {
+            snprintf(r, sizeof(r), "no server");
+        } else {
+            snprintf(r, sizeof(r), "need WiFi");
+        }
+        g_home_online = g_count;
+        ADD("Online Library", r, UI_ICON_GLOBE);
+    }
+    g_home_top = g_count;
+    ADD("Top Rated", "", UI_ICON_STAR);
+    g_home_wifi = g_count;
+    ADD("Connect Wi-Fi", g_net_ok ? "OK" : "Press X", UI_ICON_WIFI);
+    {
+        char hp[40];
+        g_home_setup = g_count;
+        snprintf(hp, sizeof(hp), "%s", g_cfg.host);
+        ADD("Setup IP/Port", hp, UI_ICON_NET);
+    }
+    g_home_appear = g_count;
+    ADD("Appearance", "skins", UI_ICON_BRUSH);
 #undef ADD
+    if (ppsspp_qa_demo_active()) {
+        if (g_home_offline >= 0) {
+            clip_copy(g_rights[g_home_offline], (int)sizeof(g_rights[0]), "12 songs");
+        }
+        if (g_home_online >= 0) {
+            clip_copy(g_rights[g_home_online], (int)sizeof(g_rights[0]), "65 tracks");
+        }
+        if (g_home_wifi >= 0) {
+            clip_copy(g_rights[g_home_wifi], (int)sizeof(g_rights[0]), "Press X");
+        }
+        if (g_home_setup >= 0) {
+            clip_copy(g_rights[g_home_setup], (int)sizeof(g_rights[0]), "192.168.31.95");
+        }
+    }
     bind_list_ptrs();
     g_icons_n = g_count;
 }
@@ -759,9 +805,22 @@ static int ensure_online(void) {
     if (g_online_mode && net_is_connected()) {
         return 1;
     }
-    /* No Wi-Fi yet → official Network Settings dialog (WLAN list). */
+    /* PPSSPP bench: light connect — no dialog, no screen reset. */
     if (!net_is_connected()) {
-        try_connect();
+        if (net_want_auto_connect()) {
+            cf_trace_step("ppsspp_wifi");
+            if (!net_connect_auto()) {
+                g_net_ok = 0;
+                g_online_mode = 0;
+                cf_trace_step("ppsspp_wifi_fail");
+                return 0;
+            }
+            cf_trace_step("ppsspp_wifi_ok");
+            /* PPSSPP HLE needs a moment after Apctl before inet send works reliably. */
+            sceKernelDelayThread(800000);
+        } else {
+            try_connect();
+        }
     }
     if (!net_is_connected()) {
         g_net_ok = 0;
@@ -921,6 +980,7 @@ static void load_all_albums(void) {
     char path[96];
     char *body = NULL;
     int i;
+    cf_trace_step("load_albums");
     snprintf(path, sizeof(path), "/api/albums?offset=%d&limit=%d&sort=year", g_offset, MAX_LIST_ITEMS);
     g_count = 0;
     g_cursor = 0;
@@ -932,6 +992,7 @@ static void load_all_albums(void) {
             format_album_rights(i);
         }
     }
+    cf_trace_val("albums_n", g_count);
     g_list_kind = LIST_ALL_ALBUMS;
     bind_list_ptrs();
 }
@@ -940,6 +1001,7 @@ static void load_tracks(void) {
     char path[96];
     char *body = NULL;
     int i;
+    cf_trace_val("load_tracks", g_album_id);
     snprintf(
         path,
         sizeof(path),
@@ -957,6 +1019,7 @@ static void load_tracks(void) {
             format_track_rights(i);
         }
     }
+    cf_trace_val("tracks_n", g_count);
     g_list_kind = LIST_TRACKS;
     bind_list_ptrs();
 }
@@ -988,6 +1051,9 @@ static void load_all_songs(void) {
     }
     g_list_kind = LIST_ALL_SONGS;
     bind_list_ptrs();
+    if (g_count > 0) {
+        g_online_tracks_hint = g_count;
+    }
 }
 
 static void load_search(void) {
@@ -1133,7 +1199,7 @@ static const char *screen_title_with_page(void) {
     if (!list_supports_pagination()) {
         return base;
     }
-    if (g_offset > 0 || g_count >= MAX_LIST_ITEMS) {
+    if (g_offset > 0) {
         int from = g_offset + 1;
         int to = g_offset + g_count;
         /* Reuse g_title_buf; if base already points here, format into a temp first. */
@@ -1171,14 +1237,28 @@ static void fill_mini_player(UiMiniPlayer *mini) {
 static void draw_current_library(void) {
     UiMiniPlayer mini;
     int ids[MAX_LIST_ITEMS];
+    const char *sublines[MAX_LIST_ITEMS];
+    const char **sub_ptr = NULL;
+    const char **labels = g_labels_ptr;
+    const char **rights = g_rights_ptr;
+    int count = g_count;
+    int cursor = g_cursor;
     int i;
     const int *id_ptr = NULL;
     static int s_warm_rr = 0;
     static int s_warm_screen = -1;
+    const char *title = screen_title_with_page();
+    UiMiniPlayer *mini_ptr = NULL;
 
     fill_mini_player(&mini);
-    if (list_shows_track_covers()) {
-        int row_h = 32;
+    if (g_screen == SCREEN_TRACKS && ppsspp_qa_demo_library(&labels, &rights, &sub_ptr, &count, &cursor, &mini)) {
+        title = "Songs";
+        for (i = 0; i < count; i++) {
+            ids[i] = i + 1;
+        }
+        id_ptr = ids;
+    } else if (list_shows_track_covers()) {
+        int row_h = 38;
         int top = 40;
         int footer_h = (mini.now_title && mini.now_title[0]) ? 48 : 0;
         int visible = (272 - top - footer_h) / row_h;
@@ -1187,8 +1267,14 @@ static void draw_current_library(void) {
 
         for (i = 0; i < g_count && i < MAX_LIST_ITEMS; i++) {
             ids[i] = (g_screen == SCREEN_ALBUMS) ? -g_items[i].id : g_items[i].id;
+            if (g_items[i].artist[0]) {
+                sublines[i] = g_items[i].artist;
+            } else {
+                sublines[i] = NULL;
+            }
         }
         id_ptr = ids;
+        sub_ptr = sublines;
 
         if (visible < 1) {
             visible = 1;
@@ -1237,16 +1323,22 @@ static void draw_current_library(void) {
             }
         }
     }
+    if (mini.now_title && mini.now_title[0]) {
+        if (!(ppsspp_qa_demo_active() && g_screen == SCREEN_HOME)) {
+            mini_ptr = &mini;
+        }
+    }
     ui_draw_library_ex(
-        screen_title_with_page(),
-        g_labels_ptr,
-        g_rights_ptr,
+        title,
+        labels,
+        rights,
         (g_screen == SCREEN_HOME && g_icons_n > 0) ? g_icons : NULL,
         id_ptr,
-        g_count,
-        g_cursor,
+        sub_ptr,
+        count,
+        cursor,
         player_is_active(),
-        (mini.now_title && mini.now_title[0]) ? &mini : NULL,
+        mini_ptr,
         g_screen == SCREEN_HOME
     );
 }
@@ -1273,24 +1365,37 @@ static void draw_current_library_or_coverflow(void) {
     }
     id_ptr = ids;
 
-    /* Warm center ±2 covers */
+    /* Warm album covers around cursor first to avoid empty side cards. */
     reap_download_thread();
     if (g_online_mode && !g_buffering && g_dl_thid < 0) {
+        int depth = ppsspp_qa_demo_active() ? 8 : 5;
         int off;
-        for (off = 0; off <= 2; off++) {
+        if (depth > g_count) {
+            depth = g_count;
+        }
+
+        for (off = 0; off < depth; off++) {
             int try_idx[2];
+            int tmax = (off == 0) ? 1 : 2;
             int t;
             try_idx[0] = g_cursor - off;
             try_idx[1] = g_cursor + off;
-            for (t = 0; t < (off == 0 ? 1 : 2); t++) {
+
+            for (t = 0; t < tmax; t++) {
                 int idx = try_idx[t];
                 int cid;
-                if (idx < 0 || idx >= g_count) {
-                    continue;
+                int make_active = (off == 0);
+
+                if (idx < 0) {
+                    idx += g_count;
                 }
-                cid = -g_items[idx].id;
+                if (idx >= g_count) {
+                    idx -= g_count;
+                }
+
+                cid = ids[idx];
                 if (cid != 0 && !ui_image_cover_for(cid)) {
-                    ui_image_load_cover_ex(g_cfg.host, g_cfg.port, cid, 0, 0);
+                    ui_image_load_cover_ex(g_cfg.host, g_cfg.port, cid, make_active, 0);
                     goto coverflow_drawn;
                 }
             }
@@ -1298,13 +1403,13 @@ static void draw_current_library_or_coverflow(void) {
     }
 coverflow_drawn:
     ui_draw_coverflow(
-        screen_title_with_page(),
+        ppsspp_qa_demo_active() ? ppsspp_qa_demo_cf_screen_title() : screen_title_with_page(),
         g_labels_ptr,
         id_ptr,
         g_count,
         g_cursor,
         player_is_active(),
-        (mini.now_title && mini.now_title[0]) ? &mini : NULL
+        (mini.now_title && mini.now_title[0] && !ppsspp_qa_demo_active()) ? &mini : NULL
     );
 }
 
@@ -1900,6 +2005,8 @@ static void play_track_online(int id, const char *title, int rating) {
     size_t ring_sz;
     int i;
 
+    cf_trace_val("play_online", id);
+
     /* Stop previous stream BEFORE any new HTTP (cover must not steal the socket). */
     stop_playback_all(1);
 
@@ -1951,11 +2058,9 @@ static void play_track_online(int id, const char *title, int rating) {
     }
 
     /*
-     * Pre-stream cover (restored 1.2.21 behavior). Defer-until-EOF left NP blank
-     * for the whole FLAC. Thumbnail is 128px PNG — short GET, then audio socket.
-     * LRU hit activates without HTTP. Miss → fallback after stream reaps.
+     * Keep track switches instant: avoid synchronous cover HTTP before stream start.
+     * Use cached thumb when present, otherwise fetch after stream settles.
      */
-    ui_image_clear_cover();
     g_cover_after_dl = 0;
     if (g_online_mode && id > 0) {
         if (ui_image_load_cover_ex(g_cfg.host, g_cfg.port, id, 1, 0) != 0 ||
@@ -2316,6 +2421,7 @@ static int try_server(void) {
         g_online_mode = 1;
         set_status("Online OK");
         free(body);
+        cf_trace_step("server_ok");
         /* #region agent log */
         dbg_log("B", "main.c:try_server", "server_ok", "{}");
         /* #endregion */
@@ -2324,9 +2430,7 @@ static int try_server(void) {
     }
     g_online_mode = 0;
     set_status("No server — check IP/firewall");
-    /* #region agent log */
-    dbg_log("B", "main.c:try_server", "server_fail", "{}");
-    /* #endregion */
+    cf_trace_step("server_fail");
     return 0;
 }
 
@@ -2491,6 +2595,7 @@ static void try_connect(void) {
      * Wait here with a readable message until switch is ON or Circle cancels.
      */
     memset(&prev, 0, sizeof(prev));
+    if (!net_want_auto_connect()) {
     while (!net_wlan_on()) {
         unsigned int pressed;
         if (g_app_exiting) {
@@ -2526,8 +2631,9 @@ static void try_connect(void) {
         }
         sceKernelDelayThread(50000);
     }
+    }
 
-    set_status("Opening Wi-Fi dialog...");
+    set_status(net_want_auto_connect() ? "PPSSPP Wi-Fi..." : "Opening Wi-Fi dialog...");
     ok = net_connect_dialog();
     /* #region agent log */
     {
@@ -2641,6 +2747,152 @@ static void begin_play_from_list(void) {
     if (g_shuffle && g_count > 1) {
         shuffle_rebuild(g_play_index);
     }
+}
+
+static void ppsspp_qa_handle_cmd(const PpssppQaCmd *cmd) {
+    int idx;
+
+    if (!cmd) {
+        return;
+    }
+    switch (cmd->action) {
+        case PPSSPP_QA_ACT_CONNECT:
+            if (player_is_active() || g_play_started || g_track_id > 0) {
+                stop_playback_all(0);
+                g_play_started = 0;
+                g_track_id = 0;
+                g_now_title[0] = '\0';
+                g_now_artist[0] = '\0';
+                g_now_album[0] = '\0';
+                g_buffering = 0;
+            }
+            (void)ensure_online();
+            g_online_mode = net_is_connected() ? 1 : 0;
+            if (g_online_mode) {
+                g_offset = 0;
+                load_all_songs();
+            }
+            set_home_menu();
+            g_screen = SCREEN_HOME;
+            if (net_gu_was_used()) {
+                ui_gpu_reset();
+            }
+            break;
+        case PPSSPP_QA_ACT_HOME:
+            set_home_menu();
+            g_screen = SCREEN_HOME;
+            break;
+        case PPSSPP_QA_ACT_LIBRARY:
+            if (!g_online_mode) {
+                (void)ensure_online();
+                g_online_mode = net_is_connected() ? 1 : 0;
+            }
+            g_offset = 0;
+            load_all_songs();
+            g_return_screen = SCREEN_MUSIC;
+            g_screen = SCREEN_TRACKS;
+            break;
+        case PPSSPP_QA_ACT_ALBUMS:
+            if (!g_online_mode) {
+                (void)ensure_online();
+                g_online_mode = net_is_connected() ? 1 : 0;
+            }
+            g_artist_id = 0;
+            g_offset = 0;
+            load_all_albums();
+            g_return_screen = SCREEN_MUSIC;
+            g_screen = SCREEN_ALBUMS;
+            g_cursor = 0;
+            break;
+        case PPSSPP_QA_ACT_SETUP:
+            g_setup_return = SCREEN_HOME;
+            g_setup_focus = 0;
+            g_setup_octet = 0;
+            g_screen = SCREEN_SETUP;
+            break;
+        case PPSSPP_QA_ACT_PICK_ALBUM:
+            idx = cmd->index;
+            if (idx < 0) {
+                idx = 0;
+            }
+            if (g_count > 0 && idx >= g_count) {
+                idx = g_count - 1;
+            }
+            if (g_count > 0) {
+                g_cursor = idx;
+                g_album_id = g_items[idx].id;
+                strncpy(g_album_name, g_items[idx].name, MAX_NAME - 1);
+                g_album_name[MAX_NAME - 1] = '\0';
+                g_offset = 0;
+                load_tracks();
+                g_screen = SCREEN_TRACKS;
+                g_cursor = 0;
+            }
+            break;
+        case PPSSPP_QA_ACT_PICK_TRACK:
+            idx = cmd->index;
+            if (idx < 0) {
+                idx = 0;
+            }
+            if (g_count > 0 && idx >= g_count) {
+                idx = g_count - 1;
+            }
+            if (g_count > 0) {
+                g_cursor = idx;
+            }
+            break;
+        case PPSSPP_QA_ACT_PLAY:
+            if (g_count > 0) {
+                begin_play_from_list();
+                if (g_items[g_cursor].artist[0]) {
+                    strncpy(g_artist_name, g_items[g_cursor].artist, MAX_NAME - 1);
+                    g_artist_name[MAX_NAME - 1] = '\0';
+                }
+                if (g_items[g_cursor].album[0]) {
+                    strncpy(g_album_name, g_items[g_cursor].album, MAX_NAME - 1);
+                    g_album_name[MAX_NAME - 1] = '\0';
+                }
+                g_now_duration_ms = (g_items[g_cursor].duration > 0)
+                    ? g_items[g_cursor].duration * 1000 : 0;
+                play_track_online(
+                    g_items[g_cursor].id,
+                    g_items[g_cursor].name,
+                    g_items[g_cursor].extra
+                );
+            }
+            break;
+        case PPSSPP_QA_ACT_NOW_PLAYING:
+            if (g_play_started || player_is_active() || g_track_id > 0) {
+                g_screen = SCREEN_PLAYING;
+            }
+            break;
+        case PPSSPP_QA_ACT_SKIN:
+            skin_set_id(cmd->skin_id);
+            theme_save();
+            break;
+        case PPSSPP_QA_ACT_TOGGLE_REPEAT:
+            g_repeat = !g_repeat;
+            set_status(g_repeat ? "Repeat ON" : "Repeat OFF");
+            break;
+        case PPSSPP_QA_ACT_TOGGLE_SHUFFLE:
+            g_shuffle = !g_shuffle;
+            if (g_shuffle && g_count > 1) {
+                shuffle_rebuild(g_play_index >= 0 ? g_play_index : g_cursor);
+            } else {
+                shuffle_reset();
+            }
+            set_status(g_shuffle ? "Shuffle ON" : "Shuffle OFF");
+            break;
+        case PPSSPP_QA_ACT_EQ_NEXT:
+            g_eq_preset = (g_eq_preset + 1) % PLAYER_EQ_COUNT;
+            g_eq_cursor = g_eq_preset;
+            player_set_eq_preset(g_eq_preset);
+            set_status(player_eq_preset_name(g_eq_preset));
+            break;
+        default:
+            break;
+    }
+    ppsspp_qa_cmd_done();
 }
 
 static void open_now_playing_view(void) {
@@ -2786,6 +3038,7 @@ int main(int argc, char *argv[]) {
     if (argv && argv[0]) {
         paths_init_argv(argv[0]);
     }
+    cf_trace_init();
     storage_init();
     metrics_init();
     download_init();
@@ -2801,6 +3054,7 @@ int main(int argc, char *argv[]) {
     g_eq_preset = player_get_eq_preset();
     g_eq_cursor = g_eq_preset;
     g_appear_skin = skin_get_id();
+    ppsspp_qa_init();
     offline_ensure_dirs();
     set_status("Ready");
 
@@ -2813,6 +3067,12 @@ int main(int argc, char *argv[]) {
         dbg_log("U", "main.c:boot", "update_companion", "{}");
     } else {
         set_home_menu();
+        if (ppsspp_qa_active()) {
+            /* QA script drives connect/navigation — not ppsspp_auto albums jump. */
+        } else if (net_want_auto_connect()) {
+            g_ppsspp_auto_pending = 1;
+            g_ppsspp_auto_delay = 45;
+        }
     }
     /* #region agent log */
     {
@@ -2833,6 +3093,43 @@ int main(int argc, char *argv[]) {
         ui_begin();
         if (g_screen != SCREEN_PLAYING) {
             pump_background_playback();
+        }
+
+        if (ppsspp_qa_active()) {
+            PpssppQaCmd qcmd;
+            if (ppsspp_qa_poll_cmd(&qcmd)) {
+                ppsspp_qa_handle_cmd(&qcmd);
+            }
+        }
+
+        /* PPSSPP bench copy only: auto Wi-Fi + /api/status + album list (ppsspp_auto.txt). */
+        if (!ppsspp_qa_active() && g_ppsspp_auto_pending && g_screen == SCREEN_HOME && !g_boot_update_mode) {
+            if (g_ppsspp_auto_delay > 0) {
+                g_ppsspp_auto_delay--;
+                set_status("PPSSPP: starting...");
+            } else {
+            g_ppsspp_auto_pending = 0;
+            set_status("PPSSPP: connecting...");
+            if (ensure_online()) {
+                if (net_ppsspp_auto_open_albums()) {
+                    g_artist_id = 0;
+                    g_offset = 0;
+                    load_all_albums();
+                    g_screen = SCREEN_ALBUMS;
+                    g_return_screen = SCREEN_MUSIC;
+                    set_status("Online — albums");
+                } else {
+                    set_music_menu();
+                    g_screen = SCREEN_MUSIC;
+                }
+            } else {
+                set_home_menu();
+                set_status("No server — run tools/ppsspp_start_server.sh");
+            }
+            if (net_gu_was_used()) {
+                ui_gpu_reset();
+            }
+            }
         }
 
         /* LightMP3: L+R toggles contextual controls help. */
@@ -3198,6 +3495,7 @@ int main(int argc, char *argv[]) {
                     np.cover = ui_image_cover();
                 }
                 np.info_density = g_np_density;
+                ppsspp_qa_demo_np(&np);
                 ui_draw_now_playing(&np);
                 if (g_show_track_info && !g_show_eq) {
                     const PlayerTheme *th = theme_active();
@@ -3260,8 +3558,15 @@ int main(int argc, char *argv[]) {
             }
         } else if (g_screen == SCREEN_SETUP) {
             int octets[4];
-            parse_host_octets(octets);
-            ui_draw_setup("Setup", octets, g_setup_octet, g_cfg.port, g_setup_focus, player_is_active());
+            int sel = g_setup_octet;
+            int port = g_cfg.port;
+            int focus = g_setup_focus;
+            if (ppsspp_qa_demo_active()) {
+                ppsspp_qa_demo_setup(octets, &sel, &port, &focus);
+            } else {
+                parse_host_octets(octets);
+            }
+            ui_draw_setup("Setup", octets, sel, port, focus, player_is_active());
 
             /* SELECT toggles IP <-> Port */
             if (pressed & PSP_CTRL_SELECT) {
@@ -3519,11 +3824,24 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            if (pressed & PSP_CTRL_UP && g_cursor > 0) {
-                g_cursor--;
-            }
-            if (pressed & PSP_CTRL_DOWN && g_cursor < g_count - 1) {
-                g_cursor++;
+            if (!(skin_wants_coverflow() && g_screen == SCREEN_ALBUMS)) {
+                if (pressed & PSP_CTRL_UP && g_cursor > 0) {
+                    g_cursor--;
+                }
+                if (pressed & PSP_CTRL_DOWN && g_cursor < g_count - 1) {
+                    g_cursor++;
+                }
+            } else {
+                int lx = (int)pad.Lx - 128;
+                static unsigned g_cf_analog_t = 0;
+                unsigned now = sceKernelGetSystemTimeLow();
+                if (lx > 72 && g_cursor < g_count - 1 && now - g_cf_analog_t > 180000u) {
+                    g_cursor++;
+                    g_cf_analog_t = now;
+                } else if (lx < -72 && g_cursor > 0 && now - g_cf_analog_t > 180000u) {
+                    g_cursor--;
+                    g_cf_analog_t = now;
+                }
             }
 
             /* Global play/pause + stop while browsing menus. */
@@ -3581,9 +3899,29 @@ int main(int argc, char *argv[]) {
                         } else {
                             set_home_menu();
                         }
-                    } else if (g_cursor == g_home_settings) {
-                        set_settings_menu();
-                        g_screen = SCREEN_SETTINGS;
+                    } else if (g_home_top >= 0 && g_cursor == g_home_top) {
+                        if (ensure_online()) {
+                            g_offset = 0;
+                            load_rated_albums();
+                            g_return_screen = SCREEN_HOME;
+                            g_screen = SCREEN_ALBUMS;
+                        } else {
+                            set_home_menu();
+                        }
+                    } else if (g_home_wifi >= 0 && g_cursor == g_home_wifi) {
+                        set_status("Opening Wi-Fi...");
+                        try_connect();
+                        set_home_menu();
+                    } else if (g_home_setup >= 0 && g_cursor == g_home_setup) {
+                        g_setup_octet = 0;
+                        g_setup_focus = 0;
+                        g_setup_return = SCREEN_HOME;
+                        g_screen = SCREEN_SETUP;
+                    } else if (g_home_appear >= 0 && g_cursor == g_home_appear) {
+                        g_appear_skin = skin_get_id();
+                        skin_set_preview(g_appear_skin);
+                        g_appear_return = SCREEN_HOME;
+                        g_screen = SCREEN_APPEARANCE;
                     }
                 } else if (g_screen == SCREEN_SETTINGS) {
                     if (g_cursor == 0) {
@@ -3771,6 +4109,7 @@ int main(int argc, char *argv[]) {
                     g_album_id = g_items[g_cursor].id;
                     strncpy(g_album_name, g_items[g_cursor].name, MAX_NAME - 1);
                     g_offset = 0;
+                    cf_trace_val("pick_album", g_album_id);
                     load_tracks();
                     g_screen = SCREEN_TRACKS;
                 } else if (g_screen == SCREEN_TRACKS || g_screen == SCREEN_TOP || g_screen == SCREEN_SEARCH) {
@@ -3947,7 +4286,7 @@ int main(int argc, char *argv[]) {
                 snprintf(
                     body,
                     sizeof(body),
-                    "Cover Flow: L/R albums  X open  O back  "
+                    "Cover Flow: Analog/D-Pad L/R albums  X open  O back  "
                     "Triangle Now Playing  L+R help"
                 );
             } else {
@@ -3966,9 +4305,22 @@ int main(int argc, char *argv[]) {
             ui_text_clip(100, 140, 300, UI_COL_MUTED, "Settings to disable  L+R help");
         }
 
-        /* Online remote debug disabled (see dbg_remote_* no-ops). */
+        /* Cover Flow debug — heartbeat + server upload when online. */
+        if (theme_active()->composition == COMP_COVERFLOW || ui_coverflow_is_active()) {
+            g_cf_remote_tick++;
+            cf_trace_flush_file();
+            if ((g_cf_remote_tick % 120u) == 0u && g_online_mode && net_is_connected()) {
+                cf_trace_flush_http(g_cfg.host, g_cfg.port);
+            }
+        }
 
         ui_end();
+
+        if (ppsspp_qa_active()) {
+            if (ppsspp_qa_tick()) {
+                break;
+            }
+        }
     }
 
     return 0;

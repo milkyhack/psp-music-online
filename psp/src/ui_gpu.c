@@ -1,4 +1,7 @@
 #include "ui_gpu.h"
+#include "ui_coverflow.h"
+#include "cf_trace.h"
+#include "ui_image.h"
 
 #include <pspdisplay.h>
 #include <pspge.h>
@@ -16,6 +19,8 @@ extern unsigned char _binary_assets_ui_labels_rgba_start[];
 #define BUF_W 512
 #define SCR_W 480
 #define SCR_H 272
+#define FRAME_BYTES (BUF_W * SCR_H * 4)
+#define CF_UI_OVERLAY_Y 188
 
 static unsigned int __attribute__((aligned(16))) g_list[262144];
 static UiGpuTex g_atlas;
@@ -139,9 +144,11 @@ void ui_gpu_init(void) {
     sceGuInit();
     sceGuStart(GU_DIRECT, g_list);
     sceGuDrawBuffer(GU_PSM_8888, (void *)0, BUF_W);
-    sceGuDispBuffer(SCR_W, SCR_H, (void *)0x88000, BUF_W);
+    sceGuDispBuffer(SCR_W, SCR_H, (void *)FRAME_BYTES, BUF_W);
+    sceGuDepthBuffer((void *)(FRAME_BYTES * 2), BUF_W);
     sceGuOffset(2048 - (SCR_W / 2), 2048 - (SCR_H / 2));
     sceGuViewport(2048, 2048, SCR_W, SCR_H);
+    sceGuDepthRange(0xc350, 0x2710);
     sceGuScissor(0, 0, SCR_W, SCR_H);
     sceGuEnable(GU_SCISSOR_TEST);
     sceGuDisable(GU_DEPTH_TEST);
@@ -185,8 +192,16 @@ void ui_gpu_reset(void) {
         ui_gpu_init();
         return;
     }
-    sceGuInit();
+    /* Restore 2D path after 3D coverflow — do not sceGuInit() every frame. */
     sceGuStart(GU_DIRECT, g_list);
+    sceGuDrawBuffer(GU_PSM_8888, (void *)0, BUF_W);
+    sceGuDepthBuffer((void *)(FRAME_BYTES * 2), BUF_W);
+    sceGuOffset(2048 - (SCR_W / 2), 2048 - (SCR_H / 2));
+    sceGuViewport(2048, 2048, SCR_W, SCR_H);
+    sceGuScissor(0, 0, SCR_W, SCR_H);
+    sceGuEnable(GU_SCISSOR_TEST);
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuDisable(GU_CULL_FACE);
     sceGuEnable(GU_TEXTURE_2D);
     sceGuEnable(GU_BLEND);
     sceGuBlendFunc(GU_ADD, GU_SRC_ALPHA, GU_ONE_MINUS_SRC_ALPHA, 0, 0);
@@ -194,7 +209,7 @@ void ui_gpu_reset(void) {
     sceGuTexFunc(GU_TFX_MODULATE, GU_TCC_RGBA);
     sceGuTexFilter(GU_LINEAR, GU_LINEAR);
     sceGuFinish();
-    sceGuSync(0, 0);
+    sceGuSync(GU_SYNC_FINISH, GU_SYNC_WHAT_DONE);
 }
 
 UiGpuTex *ui_gpu_atlas(void) {
@@ -210,8 +225,8 @@ UiGpuTex *ui_gpu_labels(void) {
 }
 
 int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels, int content_n, int track_id) {
-    int tw = 256;
-    int th = 256;
+    int tw;
+    int th;
     int y;
     u32 *dst;
     (void)track_id;
@@ -219,9 +234,11 @@ int ui_gpu_upload_cover(UiGpuTex *tex, const u32 *pixels, int content_n, int tra
     if (!tex || !pixels || content_n <= 0) {
         return -1;
     }
-    if (content_n > tw) {
-        content_n = tw;
+    if (content_n > UI_COVER_GPU_POT) {
+        content_n = UI_COVER_GPU_POT;
     }
+    tw = pot_ge(content_n);
+    th = tw;
     if (!tex->data || tex->width != tw || tex->height != th) {
         if (tex->data) {
             free(tex->data);
@@ -357,6 +374,65 @@ void ui_gpu_present(
     sceGuFinish();
     sceGuSync(0, 0);
     (void)g_list_started;
+}
+
+void ui_gpu_present_coverflow(u32 *soft_buf, int buf_stride, u32 *vram_dst, int vram_page) {
+    void *dst;
+    int overlay_h;
+
+    if (!soft_buf || !vram_dst) {
+        return;
+    }
+    if (!g_ready) {
+        ui_gpu_init();
+    }
+
+    cf_trace_step("present_bg");
+    overlay_h = SCR_H - CF_UI_OVERLAY_Y;
+    sceKernelDcacheWritebackInvalidateRange(soft_buf, (unsigned)(buf_stride * SCR_H * 4));
+
+    /* 1) CPU background (gradients, header) into the display page. */
+    sceGuStart(GU_DIRECT, g_list);
+    sceGuEnable(GU_SCISSOR_TEST);
+    sceGuScissor(0, 0, SCR_W, SCR_H);
+    sceGuDisable(GU_DEPTH_TEST);
+    dst = (void *)(((u32)vram_dst) & ~0x40000000u);
+    sceGuCopyImage(GU_PSM_8888, 0, 0, SCR_W, SCR_H, buf_stride, soft_buf, 0, 0, BUF_W, dst);
+    sceGuTexSync();
+    sceGuFinish();
+    sceGuSync(GU_SYNC_FINISH, GU_SYNC_WHAT_DONE);
+
+    /* 2) 3D carousel — same math/order as Coverflow v2.5 script.lua. */
+    cf_trace_step("present_3d");
+    ui_coverflow_render_gu(vram_page, buf_stride);
+
+    /*
+     * 3) Re-blit bottom UI over reflections (original blits nameimg after end_gu()).
+     *    Without this, 3D quads paint over album title / transport controls.
+     */
+    sceGuStart(GU_DIRECT, g_list);
+    sceGuEnable(GU_SCISSOR_TEST);
+    sceGuScissor(0, CF_UI_OVERLAY_Y, SCR_W, overlay_h);
+    sceGuDisable(GU_DEPTH_TEST);
+    sceGuCopyImage(
+        GU_PSM_8888,
+        0,
+        CF_UI_OVERLAY_Y,
+        SCR_W,
+        overlay_h,
+        buf_stride,
+        soft_buf,
+        0,
+        CF_UI_OVERLAY_Y,
+        BUF_W,
+        dst
+    );
+    sceGuTexSync();
+    sceGuFinish();
+    sceGuSync(GU_SYNC_FINISH, GU_SYNC_WHAT_DONE);
+
+    cf_trace_step("present_ui");
+    ui_gpu_reset();
 }
 
 static u32 tint_pixel(u32 src, u32 tint) {

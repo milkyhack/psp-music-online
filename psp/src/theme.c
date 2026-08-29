@@ -166,15 +166,15 @@ static const PlayerSkin SKINS[SKIN_COUNT] = {
      UI_RGB(90, 220, 200), UI_RGB(233, 70, 70),
      VIZ_DC_ORANGE, COMP_DREAMCAST, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 10, 2},
 
-    /* 15 Cover Flow — Album Theater (3D carousel style) */
+    /* 15 Cover Flow — iPod-style vivid stage (purple/cyan/magenta) */
     {"Cover Flow",
-     UI_RGB(4, 4, 8), UI_RGB(28, 28, 36), UI_RGB(70, 70, 84), UI_RGB(10, 10, 14),
-     UI_RGB(6, 6, 10), UI_RGB(248, 248, 252), UI_RGB(120, 120, 140), UI_RGB(200, 200, 220),
-     UI_RGB(220, 220, 235), UI_RGB(248, 248, 252), UI_RGB(150, 150, 170), UI_RGB(32, 32, 40),
-     UI_RGB(200, 200, 220),
-     UI_RGB(12, 12, 18), UI_RGB(28, 28, 36), UI_RGB(6, 6, 10),
-     UI_RGB(200, 200, 220), UI_RGB(233, 70, 70),
-     VIZ_SOFT_SPEC, COMP_COVERFLOW, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 8, 2},
+     UI_RGB(8, 10, 36), UI_RGB(36, 24, 88), UI_RGB(120, 80, 200), UI_RGB(14, 16, 48),
+     UI_RGB(10, 12, 40), UI_RGB(255, 252, 255), UI_RGB(180, 170, 220), UI_RGB(255, 120, 200),
+     UI_RGB(255, 200, 90), UI_RGB(255, 252, 255), UI_RGB(190, 180, 230), UI_RGB(42, 34, 88),
+     UI_RGB(255, 120, 200),
+     UI_RGB(18, 14, 52), UI_RGB(48, 36, 96), UI_RGB(8, 10, 36),
+     UI_RGB(90, 230, 255), UI_RGB(255, 80, 120),
+     VIZ_XMB_WAVE, COMP_COVERFLOW, CHROME_FLAT, PROG_BAR, CURSOR_GLOW, TYPE_NORMAL, 8, 2},
 };
 
 void theme_init(void) {

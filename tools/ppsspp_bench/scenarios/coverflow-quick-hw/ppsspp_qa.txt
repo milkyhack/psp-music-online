@@ -1,0 +1,11 @@
+connect
+wait 120
+skin 15
+screen library
+pick_track 0
+play
+wait 140
+screen albums
+wait 180
+capture coverflow
+done

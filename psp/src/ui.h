@@ -133,6 +133,7 @@ void ui_draw_library_ex(
     const char **rights,
     const int *icons,
     const int *track_ids,
+    const char **sublines,
     int count,
     int cursor,
     int playing,

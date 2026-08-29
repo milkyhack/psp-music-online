@@ -1,8 +1,8 @@
 OBJS = src/main.o src/net.o src/http.o src/jutil.o src/config.o src/player.o \
-	src/ui.o src/ui_gfx.o src/ui_font.o src/ui_image.o src/ui_gpu.o \
-	src/offline.o src/osk.o src/paths.o src/debug_log.o src/theme.o \
+	src/ui.o src/ui_gfx.o src/ui_font.o src/ui_image.o src/ui_gpu.o src/ui_coverflow.o \
+	src/cf_trace.o src/offline.o src/osk.o src/paths.o src/debug_log.o src/theme.o \
 	src/ringbuf.o src/storage.o src/metrics.o src/flac_dec.o src/download.o src/updater.o \
-	assets/ui/atlas.o assets/ui/font.o assets/ui/labels.o
+	src/ppsspp_qa.o src/ppsspp_qa_demo.o assets/ui/atlas.o assets/ui/font.o assets/ui/labels.o
 
 INCDIR = src
 # Release build: no DEBUG_HUD (no overlay). Use make DEBUG_HUD=1 for QA HUD (RAM only).

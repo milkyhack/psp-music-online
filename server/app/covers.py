@@ -68,10 +68,10 @@ def normalize_cover_bytes(data: bytes) -> Optional[bytes]:
     try:
         with Image.open(io.BytesIO(data)) as im:
             im = im.convert("RGB")
-            # Cap absurd sizes to keep disk/PSP sane
-            im.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+            # Keep masters up to 1280² — PSP client requests 720 JPEG over Wi‑Fi.
+            im.thumbnail((1280, 1280), Image.Resampling.LANCZOS)
             out = io.BytesIO()
-            im.save(out, format="JPEG", quality=90, optimize=True)
+            im.save(out, format="JPEG", quality=93, optimize=True)
             return out.getvalue()
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         log.debug("cover normalize failed: %s", exc)
@@ -254,8 +254,10 @@ def fetch_caa_cover(artist: str, album: str) -> Optional[bytes]:
             mbid = releases[0].get("id")
             if not mbid:
                 return None
-            caa = f"https://coverartarchive.org/release/{mbid}/front-500"
+            caa = f"https://coverartarchive.org/release/{mbid}/front-1200"
             img = client.get(caa)
+            if img.status_code == 404:
+                img = client.get(f"https://coverartarchive.org/release/{mbid}/front-500")
             if img.status_code == 404:
                 return None
             img.raise_for_status()
@@ -313,7 +315,10 @@ def fetch_itunes_cover(artist: str, album: str, *, retries: int = 3) -> Optional
                         art_url = results[0].get("artworkUrl100")
                     if not art_url:
                         break
-                    art_url = art_url.replace("100x100bb", "600x600bb")
+                    art_url = (
+                        art_url.replace("100x100bb", "1000x1000bb")
+                        .replace("600x600bb", "1000x1000bb")
+                    )
                     img = client.get(art_url)
                     if img.status_code in (403, 429, 503):
                         time.sleep(0.6 * (attempt + 1))
@@ -345,7 +350,13 @@ def ensure_album_cover(
     if row and row["cover_path"] and not force:
         existing = cover_abs_path(row["cover_path"])
         if existing:
-            return row["cover_path"]
+            try:
+                with Image.open(existing) as im:
+                    if max(im.size) >= 640:
+                        return row["cover_path"]
+            except OSError:
+                pass
+            # Stale low-res cache — refetch at higher quality.
 
     tracks = conn.execute(
         "SELECT path, title FROM tracks WHERE album_id = ? ORDER BY track_num, id",
