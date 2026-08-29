@@ -1365,16 +1365,18 @@ static void draw_current_library_or_coverflow(void) {
     }
     id_ptr = ids;
 
-    /* Warm album covers around cursor first to avoid empty side cards. */
+    /* Warm center + side album covers around cursor to keep 3D lanes populated. */
     reap_download_thread();
     if (g_online_mode && !g_buffering && g_dl_thid < 0) {
         int depth = ppsspp_qa_demo_active() ? 8 : 5;
+        int fetch_budget = ppsspp_qa_demo_active() ? 4 : 3;
+        int fetched = 0;
         int off;
         if (depth > g_count) {
             depth = g_count;
         }
 
-        for (off = 0; off < depth; off++) {
+        for (off = 0; off < depth && fetched < fetch_budget; off++) {
             int try_idx[2];
             int tmax = (off == 0) ? 1 : 2;
             int t;
@@ -1396,12 +1398,11 @@ static void draw_current_library_or_coverflow(void) {
                 cid = ids[idx];
                 if (cid != 0 && !ui_image_cover_for(cid)) {
                     ui_image_load_cover_ex(g_cfg.host, g_cfg.port, cid, make_active, 0);
-                    goto coverflow_drawn;
+                    fetched++;
                 }
             }
         }
     }
-coverflow_drawn:
     ui_draw_coverflow(
         ppsspp_qa_demo_active() ? ppsspp_qa_demo_cf_screen_title() : screen_title_with_page(),
         g_labels_ptr,

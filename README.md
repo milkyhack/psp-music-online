@@ -28,7 +28,7 @@ LAN only. Same Wi‑Fi. No cloud.
 
 ### What's new
 
-**1.3.15**
+**1.5.0**
 
 | Area | What it does |
 |------|----------------|
@@ -316,7 +316,7 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 
 ### Что нового
 
-**1.3.15**
+**1.5.0**
 
 | Где | Что сделано |
 |-----|-------------|

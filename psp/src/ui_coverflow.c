@@ -107,8 +107,6 @@ int ui_coverflow_wants_3d(void) {
 }
 
 static const UiCover *cf_cover_at(int i) {
-    const UiCover *cover = NULL;
-
     if (g_cf_hero && i == g_cf_cursor) {
         return g_cf_hero;
     }
@@ -116,33 +114,7 @@ static const UiCover *cf_cover_at(int i) {
         return g_cf_hero;
     }
     if (g_cf_ids) {
-        int off;
-        cover = ui_image_cover_for(g_cf_ids[i]);
-        if (cover && cover->ready) {
-            return cover;
-        }
-        /* Keep side cards populated: use nearest ready cover as fallback. */
-        for (off = 1; off < g_cf_count && off <= 3; off++) {
-            int idx_l = i - off;
-            int idx_r = i + off;
-            if (idx_l < 0) {
-                idx_l += g_cf_count;
-            }
-            if (idx_r >= g_cf_count) {
-                idx_r -= g_cf_count;
-            }
-            cover = ui_image_cover_for(g_cf_ids[idx_l]);
-            if (cover && cover->ready) {
-                return cover;
-            }
-            cover = ui_image_cover_for(g_cf_ids[idx_r]);
-            if (cover && cover->ready) {
-                return cover;
-            }
-        }
-    }
-    if (g_cf_hero && g_cf_hero->ready) {
-        return g_cf_hero;
+        return ui_image_cover_for(g_cf_ids[i]);
     }
     return NULL;
 }
