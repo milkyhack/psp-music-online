@@ -1,0 +1,19 @@
+connect
+wait 120
+skin 0
+screen library
+pick_track 0
+play
+wait 120
+screen now-playing
+capture ctrl-base
+repeat
+wait 40
+capture ctrl-repeat
+shuffle
+wait 40
+capture ctrl-shuffle
+eq_next
+wait 40
+capture ctrl-eq
+done

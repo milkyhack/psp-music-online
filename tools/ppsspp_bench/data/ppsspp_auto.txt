@@ -1,0 +1,3 @@
+# PPSSPP bench only — do NOT copy to a real PSP Memory Stick.
+# Presence of this file enables auto Wi-Fi + server probe at boot.
+albums

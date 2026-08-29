@@ -1,0 +1,37 @@
+# Real-data smoke: play 5 tracks, verify switch + covers + controls.
+connect
+wait 120
+screen library
+pick_track 0
+play
+wait 150
+screen now-playing
+capture np-1
+screen library
+pick_track 1
+play
+wait 150
+screen now-playing
+capture np-2
+screen library
+pick_track 2
+play
+wait 150
+screen now-playing
+capture np-3
+screen library
+pick_track 3
+play
+wait 150
+screen now-playing
+capture np-4
+screen library
+pick_track 4
+play
+wait 150
+screen now-playing
+capture np-5
+screen albums
+wait 240
+capture coverflow
+done

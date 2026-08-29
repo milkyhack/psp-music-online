@@ -1,0 +1,41 @@
+# Real-data smoke: 5 track switches + Cover Flow HW path.
+connect
+wait 120
+skin 0
+screen library
+pick_track 0
+play
+wait 120
+screen now-playing
+capture np-1
+screen library
+pick_track 1
+play
+wait 120
+screen now-playing
+capture np-2
+screen library
+pick_track 2
+play
+wait 120
+screen now-playing
+capture np-3
+screen library
+pick_track 3
+play
+wait 120
+screen now-playing
+capture np-4
+screen library
+pick_track 4
+play
+wait 120
+screen now-playing
+capture np-5
+connect
+wait 120
+skin 15
+screen albums
+wait 240
+capture coverflow
+done

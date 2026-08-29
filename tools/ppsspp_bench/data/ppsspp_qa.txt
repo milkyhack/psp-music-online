@@ -1,0 +1,25 @@
+# PPSSPP bench only — never copy to real PSP ms0:
+connect
+wait 120
+capture home
+skin 8
+screen albums
+pick_album 0
+pick_track 2
+play
+wait 180
+screen library
+wait 120
+capture library
+skin 0
+screen now-playing
+wait 45
+capture now-playing
+screen setup
+wait 30
+capture setup
+skin 15
+screen albums
+wait 240
+capture coverflow
+done

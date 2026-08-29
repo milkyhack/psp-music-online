@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>PSP Music Server — Админка</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/admin/admin.css" />
+</head>
+<body>
+  <div class="bg" aria-hidden="true"></div>
+  <header class="top">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <div>
+        <h1>PSP Music Server</h1>
+        <p class="sub">каталог · жанры · рейтинг · стрим для PSP</p>
+      </div>
+    </div>
+    <nav class="top-nav">
+      <span class="status-pill" id="status-pill">проверка…</span>
+      <button type="button" class="btn btn-outline btn-sm" id="btn-refresh">↻ Обновить</button>
+    </nav>
+  </header>
+
+  <main>
+    <section class="panel panel-hero lan-hint">
+      <div class="panel-head">
+        <h2>PSP — подключение</h2>
+        <span class="panel-tag">LAN</span>
+      </div>
+      <div class="psp-setup" id="psp-setup">
+        <div class="psp-setup-head">
+          <span class="psp-setup-label">Setup IP/Port</span>
+          <button type="button" class="btn btn-outline btn-sm" id="btn-copy-psp" hidden>Копировать</button>
+        </div>
+        <code class="psp-setup-line mono" id="psp-setup-line">определяем IP…</code>
+        <p class="psp-setup-sub" id="psp-setup-sub"></p>
+      </div>
+      <p class="hint" id="lan-hint-detail"></p>
+      <div class="ip-chips" id="lan-ips"></div>
+    </section>
+
+    <section class="panel panel-actions">
+      <div class="panel-head">
+        <h2>Быстрые действия</h2>
+        <span class="panel-tag">1 → 2 → 3</span>
+      </div>
+      <p class="lead">Скан → обложки → инфо из сети. Жанры и рейтинг появятся после скана.</p>
+      <div class="action-grid">
+        <button type="button" class="action-card primary" id="btn-scan">
+          <span class="action-icon">📂</span>
+          <span class="action-title">Полный скан</span>
+          <span class="action-desc">Треки + жанры + обложки</span>
+        </button>
+        <button type="button" class="action-card" id="btn-scan-nocover">
+          <span class="action-icon">⚡</span>
+          <span class="action-title">Быстрый скан</span>
+          <span class="action-desc">Без обложек, только каталог</span>
+        </button>
+        <button type="button" class="action-card accent" id="btn-metadata-backfill">
+          <span class="action-icon">🌐</span>
+          <span class="action-title">Инфо из сети</span>
+          <span class="action-desc">iTunes · MusicBrainz · рейтинг</span>
+        </button>
+        <button type="button" class="action-card" id="btn-covers-backfill">
+          <span class="action-icon">🖼</span>
+          <span class="action-title">Догрузить обложки</span>
+          <span class="action-desc">Для альбомов без art</span>
+        </button>
+      </div>
+      <p class="toast" id="toast" hidden></p>
+    </section>
+
+    <section class="panel browse">
+      <div class="panel-head">
+        <h2>Каталог</h2>
+        <span class="panel-tag">жанры · рейтинг · артисты</span>
+      </div>
+      <div class="stat-cards" id="browse-summary"></div>
+      <div class="browse-tabs" role="tablist">
+        <button type="button" class="browse-tab active" data-tab="genres" role="tab">🎵 Жанры</button>
+        <button type="button" class="browse-tab" data-tab="rated" role="tab">★ Мой рейтинг</button>
+        <button type="button" class="browse-tab" data-tab="network" role="tab">🌐 Из сети</button>
+        <button type="button" class="browse-tab" data-tab="artists" role="tab">👤 Артисты</button>
+      </div>
+      <div class="table-wrap browse-table">
+        <table>
+          <thead id="browse-head">
+            <tr><th>Жанр</th><th>Треков</th><th>Альбомов</th></tr>
+          </thead>
+          <tbody id="browse-body">
+            <tr><td colspan="3">Загрузка…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <article class="detail-box" id="browse-detail" hidden></article>
+    </section>
+
+    <section class="grid-stats">
+      <article class="panel stat-panel" id="panel-library">
+        <h2>Библиотека</h2>
+        <p class="path mono" id="music-path">—</p>
+        <p class="path-meta" id="music-path-meta"></p>
+        <dl class="stats" id="library-stats"></dl>
+        <div class="formats" id="formats"></div>
+      </article>
+      <article class="panel stat-panel" id="panel-covers">
+        <h2>Обложки</h2>
+        <dl class="stats" id="cover-stats"></dl>
+        <p class="hint" id="cover-hint"></p>
+      </article>
+      <article class="panel stat-panel" id="panel-stream">
+        <h2>Стрим</h2>
+        <dl class="stats" id="stream-stats"></dl>
+        <p class="hint" id="stream-hint"></p>
+        <button type="button" class="btn btn-outline btn-sm" id="btn-clear-cache">Очистить кэш MP3</button>
+      </article>
+    </section>
+
+    <section class="caps" id="capabilities" aria-label="Статус">
+      <h2>Статус сервера</h2>
+      <ul class="cap-list" id="cap-list"></ul>
+    </section>
+
+    <section class="panel settings">
+      <div class="panel-head">
+        <h2>Настройки</h2>
+        <span class="panel-tag">.env</span>
+      </div>
+      <form id="settings-form">
+        <label>
+          <span>MUSIC_DIR</span>
+          <input type="text" name="music_dir" id="inp-music-dir" autocomplete="off" spellcheck="false" placeholder="/Users/you/Music" />
+        </label>
+        <div class="row">
+          <label>
+            <span>HOST</span>
+            <input type="text" name="host" id="inp-host" autocomplete="off" placeholder="0.0.0.0" />
+          </label>
+          <label>
+            <span>PORT</span>
+            <input type="number" name="port" id="inp-port" min="1" max="65535" placeholder="8084" />
+          </label>
+        </div>
+        <label>
+          <span>API_KEY</span>
+          <input type="text" name="api_key" id="inp-api-key" autocomplete="off" spellcheck="false" placeholder="пусто = открыто в LAN" />
+        </label>
+        <div class="settings-meta" id="settings-meta"></div>
+        <div class="actions">
+          <button type="submit" class="btn btn-primary">Сохранить настройки</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel logs">
+      <div class="panel-head">
+        <h2>Логи PSP</h2>
+        <span class="panel-tag">удалённый дебаг</span>
+      </div>
+      <p class="lead">Хлебные крошки с консоли (RAM → API), без файла на Memory Stick.</p>
+      <div class="actions" style="margin-bottom:0.75rem">
+        <button type="button" class="btn btn-outline btn-sm" id="btn-logs-refresh">↻ Логи</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Время</th>
+              <th>Версия</th>
+              <th>Событий</th>
+              <th>Последнее</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="logs-body">
+            <tr><td colspan="5">Пока пусто — поиграй на PSP в сети</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <pre class="log-detail mono" id="log-detail" hidden></pre>
+    </section>
+
+    <section class="panel tracks">
+      <div class="panel-head">
+        <h2>Последние треки</h2>
+        <span class="panel-tag">превью</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th></th>
+              <th>Название</th>
+              <th>Исполнитель</th>
+              <th>Формат</th>
+              <th>Стрим</th>
+              <th>Обложка</th>
+            </tr>
+          </thead>
+          <tbody id="tracks-body">
+            <tr><td colspan="6">Загрузка…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <audio id="preview" controls preload="none"></audio>
+    </section>
+  </main>
+
+  <script src="/static/admin/admin.js"></script>
+</body>
+</html>
