@@ -9,7 +9,14 @@ void net_shutdown(void);
  * Show the official PSP Wi-Fi connection dialog (Network Settings list).
  * Returns 1 if connected with IP, 0 on cancel/fail.
  * Uses GU while the dialog is open; call ui_init() afterwards to restore UI.
+ *
+ * If ms0:/.../data/ppsspp_auto.txt exists (PPSSPP bench), skips the dialog and
+ * uses sceNetApctlConnect(1) — PPSSPP auto-connects when EnableWlan is ON.
  */
+int net_want_auto_connect(void);
+/* 1 if ppsspp_auto.txt contains "albums" (bench opens album list after connect). */
+int net_ppsspp_auto_open_albums(void);
+int net_connect_auto(void);
 int net_connect_dialog(void);
 
 /* 1 if we currently have an IP from APCTL. */

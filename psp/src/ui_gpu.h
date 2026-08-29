@@ -81,6 +81,9 @@ void ui_gpu_present(
     int cover_h
 );
 
+/* CPU background + real 3D Cover Flow carousel (Coverflow v2.5 math). */
+void ui_gpu_present_coverflow(u32 *soft_buf, int buf_stride, u32 *vram_dst, int vram_page);
+
 /* CPU-side atlas blit into soft buffer (when GU overlays are not used). */
 void ui_gpu_blit_atlas_cpu(u32 *dst, int dst_stride, int region, int x, int y, int w, int h, u32 tint);
 void ui_gpu_blit_font_cpu(u32 *dst, int dst_stride, int x, int y, u32 color, const char *s, int size);

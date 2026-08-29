@@ -1,0 +1,1 @@
+# PPSSPP bench: CPU Cover Flow (no 3D GU). Emulator only.

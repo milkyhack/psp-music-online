@@ -16,6 +16,7 @@
 
 #include "debug_log.h"
 #include "http.h"
+#include "paths.h"
 
 /* Match SDK samples/utility/netdialog exactly — absolute VRAM addrs corrupt the LCD */
 #define NET_BUF_WIDTH 512
@@ -233,6 +234,74 @@ static void draw_dialog_bg(void) {
     sceGuSync(GU_SYNC_FINISH, GU_SYNC_WHAT_DONE);
 }
 
+int net_want_auto_connect(void) {
+    char path[280];
+    SceUID fd;
+
+    paths_join(path, sizeof(path), "data/ppsspp_auto.txt");
+    fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    if (fd >= 0) {
+        sceIoClose(fd);
+        return 1;
+    }
+    return 0;
+}
+
+int net_ppsspp_auto_open_albums(void) {
+    char path[280];
+    char buf[128];
+    SceUID fd;
+    int n;
+
+    if (!net_want_auto_connect()) {
+        return 0;
+    }
+    paths_join(path, sizeof(path), "data/ppsspp_auto.txt");
+    fd = sceIoOpen(path, PSP_O_RDONLY, 0);
+    if (fd < 0) {
+        return 0;
+    }
+    n = sceIoRead(fd, buf, sizeof(buf) - 1);
+    sceIoClose(fd);
+    if (n <= 0) {
+        return 0;
+    }
+    buf[n] = '\0';
+    return strstr(buf, "albums") != NULL;
+}
+
+int net_connect_auto(void) {
+    int ret;
+    int state;
+    int tries;
+
+    g_gu_was_used = 0;
+    ret = net_init();
+    if (ret < 0) {
+        return 0;
+    }
+    if (net_is_connected()) {
+        return 1;
+    }
+
+    ret = sceNetApctlConnect(1);
+    if (ret < 0) {
+        set_net_fail("Apctl", ret);
+        return 0;
+    }
+
+    for (tries = 0; tries < 200; tries++) {
+        if (sceNetApctlGetState(&state) >= 0 && state == PSP_NET_APCTL_STATE_GOT_IP) {
+            g_net_last_error = 0;
+            g_net_last_step[0] = '\0';
+            return 1;
+        }
+        sceKernelDelayThread(100000);
+    }
+    set_net_fail("ApctlTO", -1);
+    return 0;
+}
+
 int net_connect_dialog(void) {
     int ret;
     int done = 0;
@@ -247,6 +316,10 @@ int net_connect_dialog(void) {
     /* #endregion */
 
     g_gu_was_used = 0;
+
+    if (net_want_auto_connect()) {
+        return net_connect_auto();
+    }
 
     /* Always show the official connection list — do not skip when already online. */
     if (net_modules_loaded && net_is_connected()) {

@@ -1,12 +1,16 @@
 #include "http.h"
 #include "debug_log.h"
 #include "storage.h"
+#include "net.h"
 
 #include <pspkernel.h>
+#include <psphttp.h>
 #include <pspnet.h>
 #include <pspnet_inet.h>
 #include <pspnet_apctl.h>
 #include <pspsdk.h>
+#include <psputility.h>
+#include <psputility_netmodules.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <stdio.h>
@@ -219,12 +223,20 @@ static void sock_close(int sock) {
 
 static int sock_send_all(int sock, const char *buf, int len) {
     int sent = 0;
+    int retries = 0;
+
     while (sent < len) {
         int n = sceNetInetSend(sock, buf + sent, (size_t)(len - sent), 0);
-        if (n <= 0) {
+        if (n > 0) {
+            sent += n;
+            retries = 0;
+            continue;
+        }
+        if (retries >= 30) {
             return -1;
         }
-        sent += n;
+        retries++;
+        sceKernelDelayThread(50000);
     }
     return 0;
 }
@@ -369,8 +381,161 @@ static int read_response(int sock, char **out_body, int *out_len) {
     return HTTP_OK;
 }
 
+static int net_module_ok(int err) {
+    return err >= 0 || err == (int)0x80110801 || err == (int)0x80110802;
+}
+
+static int g_http_sce_ready = 0;
+
+static int http_sce_ensure(void) {
+    int err;
+
+    if (g_http_sce_ready) {
+        return 0;
+    }
+    err = sceUtilityLoadNetModule(PSP_NET_MODULE_PARSEURI);
+    if (!net_module_ok(err)) {
+        return err;
+    }
+    err = sceUtilityLoadNetModule(PSP_NET_MODULE_PARSEHTTP);
+    if (!net_module_ok(err)) {
+        return err;
+    }
+    err = sceUtilityLoadNetModule(PSP_NET_MODULE_HTTP);
+    if (!net_module_ok(err)) {
+        return err;
+    }
+    err = sceHttpInit(20000);
+    if (err < 0 && err != (int)0x80431001) {
+        return err;
+    }
+    g_http_sce_ready = 1;
+    return 0;
+}
+
+/*
+ * PPSSPP bench: raw sceNetInetSend often fails in HLE; sceHttp works reliably.
+ * Used only when data/ppsspp_auto.txt exists (emulator memstick copy).
+ */
+static int http_get_sce(const char *host, int port, const char *path, char **out_body, int *out_len) {
+    char agent[] = "PSPMusic/1.3";
+    char scheme[] = "http";
+    char pathbuf[256];
+    char *buf = NULL;
+    int cap = 0;
+    int len = 0;
+    int tmpl;
+    int conn;
+    int req;
+    int status = 0;
+
+    if (!host || !path || http_sce_ensure() < 0) {
+        return HTTP_ERR;
+    }
+
+    tmpl = sceHttpCreateTemplate(agent, 1, 0);
+    if (tmpl < 0) {
+        return HTTP_ERR;
+    }
+
+    conn = sceHttpCreateConnection(tmpl, (char *)host, scheme, (unsigned short)port, 0);
+    if (conn < 0) {
+        sceHttpDeleteTemplate(tmpl);
+        return HTTP_ERR;
+    }
+
+    strncpy(pathbuf, path, sizeof(pathbuf) - 1);
+    pathbuf[sizeof(pathbuf) - 1] = '\0';
+
+    req = sceHttpCreateRequest(conn, PSP_HTTP_METHOD_GET, pathbuf, 0);
+    if (req < 0) {
+        sceHttpDeleteConnection(conn);
+        sceHttpDeleteTemplate(tmpl);
+        return HTTP_ERR;
+    }
+
+    if (g_api_key[0]) {
+        sceHttpAddExtraHeader(req, "X-Api-Key", g_api_key, 0);
+    }
+
+    if (sceHttpSendRequest(req, NULL, 0) < 0) {
+        sceHttpDeleteRequest(req);
+        sceHttpDeleteConnection(conn);
+        sceHttpDeleteTemplate(tmpl);
+        return HTTP_ERR;
+    }
+
+    if (sceHttpGetStatusCode(req, &status) < 0 || status < 200 || status >= 300) {
+        sceHttpDeleteRequest(req);
+        sceHttpDeleteConnection(conn);
+        sceHttpDeleteTemplate(tmpl);
+        return HTTP_ERR;
+    }
+
+    for (;;) {
+        char chunk[4096];
+        int n = sceHttpReadData(req, chunk, sizeof(chunk));
+        if (n < 0) {
+            free(buf);
+            sceHttpDeleteRequest(req);
+            sceHttpDeleteConnection(conn);
+            sceHttpDeleteTemplate(tmpl);
+            return HTTP_ERR;
+        }
+        if (n == 0) {
+            break;
+        }
+        if (len + n + 1 > cap) {
+            int ncap = cap ? cap * 2 : 8192;
+            while (ncap < len + n + 1) {
+                ncap *= 2;
+            }
+            {
+                char *nb = (char *)realloc(buf, (size_t)ncap);
+                if (!nb) {
+                    free(buf);
+                    sceHttpDeleteRequest(req);
+                    sceHttpDeleteConnection(conn);
+                    sceHttpDeleteTemplate(tmpl);
+                    return HTTP_ERR;
+                }
+                buf = nb;
+                cap = ncap;
+            }
+        }
+        memcpy(buf + len, chunk, (size_t)n);
+        len += n;
+    }
+
+    sceHttpDeleteRequest(req);
+    sceHttpDeleteConnection(conn);
+    sceHttpDeleteTemplate(tmpl);
+
+    if (!buf || len <= 0) {
+        free(buf);
+        return HTTP_ERR;
+    }
+    buf[len] = '\0';
+
+    if (out_body) {
+        *out_body = buf;
+    } else {
+        free(buf);
+    }
+    if (out_len) {
+        *out_len = len;
+    }
+    return HTTP_OK;
+}
+
 int http_get(const char *host, int port, const char *path, char **out_body, int *out_len) {
-    int sock = open_tcp(host, port);
+    int sock;
+
+    if (net_want_auto_connect()) {
+        return http_get_sce(host, port, path, out_body, out_len);
+    }
+
+    sock = open_tcp(host, port);
     if (sock < 0) {
         return HTTP_ERR;
     }

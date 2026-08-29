@@ -612,7 +612,10 @@ def _thumbnail_response(path: Path, size: int, fmt: str) -> Response:
             cover = cover.crop((left, top, left + side, top + side))
             canvas = cover.resize((size, size), Image.Resampling.LANCZOS)
             output = BytesIO()
-            if fmt == "bmp":
+            if fmt in ("jpeg", "jpg"):
+                canvas.save(output, format="JPEG", quality=92, optimize=True)
+                media_type = "image/jpeg"
+            elif fmt == "bmp":
                 canvas.save(output, format="BMP")
                 media_type = "image/bmp"
             else:
@@ -630,8 +633,8 @@ def _thumbnail_response(path: Path, size: int, fmt: str) -> Response:
 @app.get("/api/covers/album/{album_id}/thumbnail")
 def cover_album_thumbnail(
     album_id: int,
-    size: int = Query(default=160, ge=32, le=256),
-    format: str = Query(default="png", pattern="^(png|bmp)$"),
+    size: int = Query(default=160, ge=32, le=1280),
+    format: str = Query(default="png", pattern="^(png|bmp|jpeg|jpg)$"),
     _: None = Depends(require_api_key),
 ) -> Response:
     path = _resolve_album_cover_path(album_id)
@@ -647,8 +650,8 @@ def cover_for_track(track_id: int, _: None = Depends(require_api_key)):
 @app.get("/api/covers/{track_id}/thumbnail")
 def cover_thumbnail(
     track_id: int,
-    size: int = Query(default=160, ge=32, le=256),
-    format: str = Query(default="png", pattern="^(png|bmp)$"),
+    size: int = Query(default=160, ge=32, le=1280),
+    format: str = Query(default="png", pattern="^(png|bmp|jpeg|jpg)$"),
     _: None = Depends(require_api_key),
 ) -> Response:
     """Compact square thumbnail; lazily fetches missing album art."""

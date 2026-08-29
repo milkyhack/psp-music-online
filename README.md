@@ -12,6 +12,8 @@
 
 LAN only. Same Wi‑Fi. No cloud.
 
+> **Runtime requirement:** PSP client is tested and supported on **ARK-5 CFW**.
+
 ### Contents
 
 - [What's new](#whats-new)
@@ -26,7 +28,7 @@ LAN only. Same Wi‑Fi. No cloud.
 
 ### What's new
 
-**1.3.15**
+**1.5.0**
 
 | Area | What it does |
 |------|----------------|
@@ -83,13 +85,19 @@ LAN only. Same Wi‑Fi. No cloud.
 | Cover Flow | [`docs/assets/coverflow.png`](docs/assets/coverflow.png) |
 | Setup | [`docs/assets/setup.png`](docs/assets/setup.png) |
 
+### Release packaging (clean)
+
+- Publish only the project sources + release artifacts (`EBOOT.PBP`, release zip).
+- Do not include local QA/runtime files (`ppsspp_qa.txt`, `ppsspp_auto.txt`, `cf_safe.txt`, local reports/logs).
+- For real hardware release target: **PSP + ARK-5 CFW**.
+
 ### Quick start (5 minutes)
 
 #### What you need
 
 | Item | Why |
 |------|-----|
-| PSP with CFW (ARK / PRO / Infinity, etc.) | Run homebrew |
+| PSP with **ARK-5 CFW** | Run homebrew (release target) |
 | Memory Stick | Client + offline music |
 | PC on the same Wi‑Fi | Server |
 | Python 3.10+ | Server |
@@ -292,6 +300,8 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 
 Только LAN. Одна и та же сеть Wi‑Fi. Без облака.
 
+> **Требование релиза:** клиент PSP поддерживается и тестируется на **ARK-5 CFW**.
+
 ### Содержание
 
 - [Что нового](#что-нового)
@@ -306,7 +316,7 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 
 ### Что нового
 
-**1.3.15**
+**1.5.0**
 
 | Где | Что сделано |
 |-----|-------------|
@@ -363,13 +373,19 @@ Sony, PlayStation, and PSP are trademarks of their respective owners. This proje
 | Cover Flow | [`docs/assets/coverflow.png`](docs/assets/coverflow.png) |
 | Настройка | [`docs/assets/setup.png`](docs/assets/setup.png) |
 
+### Что публиковать в релиз
+
+- В GitHub публикуем только исходники проекта и релизные артефакты (`EBOOT.PBP`, release zip).
+- Локальные QA/bench файлы не публикуем (`ppsspp_qa.txt`, `ppsspp_auto.txt`, `cf_safe.txt`, локальные отчеты/логи).
+- Целевая прошивка релиза на железе: **ARK-5 CFW**.
+
 ### Быстрый старт (5 минут)
 
 #### Что нужно
 
 | Что | Зачем |
 |-----|--------|
-| PSP с CFW (ARK / PRO / Infinity и т.п.) | Запуск homebrew |
+| PSP с **ARK-5 CFW** | Запуск homebrew (релизная цель) |
 | Memory Stick | Клиент + офлайн‑музыка |
 | ПК в той же сети Wi‑Fi | Сервер |
 | Python 3.10+ | Сервер |

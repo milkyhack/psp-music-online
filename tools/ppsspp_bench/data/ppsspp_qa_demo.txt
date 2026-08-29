@@ -1,0 +1,2 @@
+# Optional visual mock mode for QA captures.
+# Keep this file bench-only; never copy to a real PSP Memory Stick.

@@ -111,6 +111,24 @@ static int scale_for(int size) {
     return 1;
 }
 
+static void icon_badge_letter(int x, int y, int s, u32 color, char letter) {
+    int inner = s - 2;
+    int lw = 8;
+    int lh = 8;
+    int tx;
+    int ty;
+
+    if (inner < 8) {
+        inner = 8;
+    }
+    ui_gfx_round_fill(x + 1, y + 1, inner, inner, 3, 0xFF141422u);
+    ui_gfx_hairline_rect(x + 1, y + 1, inner, inner, color, 220);
+
+    tx = x + (s - lw) / 2;
+    ty = y + (s - lh) / 2;
+    ui_font_glyph(tx, ty, color, letter, UI_FONT_SM);
+}
+
 void ui_font_init(void) {
 }
 
@@ -190,7 +208,7 @@ void ui_font_text_shadow(int x, int y, u32 color, u32 shadow, const char *s, int
 }
 
 void ui_font_icon(int x, int y, int size, int icon, u32 color) {
-    int s = size < 10 ? 10 : size;
+    int s = size < 12 ? 12 : size;
     int cx = x + s / 2;
     int cy = y + s / 2;
     int t = s / 5;
@@ -237,89 +255,47 @@ void ui_font_icon(int x, int y, int size, int icon, u32 color) {
             }
             break;
         case UI_ICON_EQ:
-            ui_gfx_fill(x + 2, y + s / 2, t, s / 2 - 1, color);
-            ui_gfx_fill(x + 2 + t + 2, y + 3, t, s - 6, color);
-            ui_gfx_fill(x + 2 + 2 * (t + 2), y + s / 3, t, s - s / 3 - 2, color);
+            icon_badge_letter(x, y, s, color, 'E');
             break;
         case UI_ICON_SHUF:
-            ui_gfx_line(x + 2, y + 3, x + s - 3, y + s - 4, color);
-            ui_gfx_line(x + 2, y + s - 4, x + s - 3, y + 3, color);
-            ui_gfx_circle_fill(x + s - 3, y + 3, 2, color);
-            ui_gfx_circle_fill(x + s - 3, y + s - 4, 2, color);
+            icon_badge_letter(x, y, s, color, 'S');
             break;
         case UI_ICON_RPT:
-            ui_gfx_ring(cx, cy, s / 2 - 2, 2, color);
-            ui_gfx_fill(cx + s / 4, cy - 2, 4, 2, color);
+            icon_badge_letter(x, y, s, color, 'R');
             break;
         case UI_ICON_DL:
-            ui_gfx_fill(cx - 1, y + 2, 3, s / 2, color);
-            {
-                int i;
-                for (i = 0; i < s / 3; i++) {
-                    ui_gfx_fill(cx - i, y + s / 2 + i, i * 2 + 3, 1, color);
-                }
-            }
-            ui_gfx_fill(x + 3, y + s - 4, s - 6, 2, color);
+            icon_badge_letter(x, y, s, color, 'D');
             break;
         case UI_ICON_NOTE:
-            ui_gfx_fill(cx + 2, y + 2, 2, s - 6, color);
-            ui_gfx_circle_fill(cx - 1, y + s - 5, 3, color);
-            ui_gfx_circle_fill(cx + 4, y + s - 7, 3, color);
-            ui_gfx_fill(cx + 2, y + 2, 5, 2, color);
+            icon_badge_letter(x, y, s, color, 'M');
             break;
         case UI_ICON_GLOBE:
-            ui_gfx_ring(cx, cy, s / 2 - 2, 2, color);
-            ui_gfx_fill(cx - s / 2 + 3, cy - 1, s - 6, 2, color);
-            ui_gfx_fill(cx - 1, cy - s / 2 + 3, 2, s - 6, color);
+            icon_badge_letter(x, y, s, color, 'O');
             break;
         case UI_ICON_STAR: {
-            /* Simple 5-point star as diamond + cross */
-            ui_gfx_fill(cx - 1, y + 2, 2, s - 4, color);
-            ui_gfx_fill(x + 2, cy - 1, s - 4, 2, color);
-            ui_gfx_line(x + 3, y + 4, x + s - 4, y + s - 5, color);
-            ui_gfx_line(x + s - 4, y + 4, x + 3, y + s - 5, color);
+            icon_badge_letter(x, y, s, color, 'T');
             break;
         }
         case UI_ICON_WIFI:
-            ui_gfx_ring(cx, cy + 2, s / 2 - 1, 2, color);
-            ui_gfx_ring(cx, cy + 3, s / 3, 2, color);
-            ui_gfx_circle_fill(cx, cy + s / 2 - 3, 2, color);
+            icon_badge_letter(x, y, s, color, 'W');
             break;
         case UI_ICON_NET:
-            ui_gfx_circle_fill(cx, cy, 2, color);
-            ui_gfx_circle_fill(x + 3, y + 3, 2, color);
-            ui_gfx_circle_fill(x + s - 4, y + 3, 2, color);
-            ui_gfx_circle_fill(x + 3, y + s - 4, 2, color);
-            ui_gfx_line(cx, cy, x + 3, y + 3, color);
-            ui_gfx_line(cx, cy, x + s - 4, y + 3, color);
-            ui_gfx_line(cx, cy, x + 3, y + s - 4, color);
+            icon_badge_letter(x, y, s, color, 'N');
             break;
         case UI_ICON_BRUSH:
-            ui_gfx_fill(cx - 1, y + 2, 2, s / 2, color);
-            ui_gfx_fill(x + 3, y + s / 2, s - 6, 3, color);
-            ui_gfx_fill(x + 4, y + s / 2 + 3, s - 8, s / 3, color);
+            icon_badge_letter(x, y, s, color, 'P');
             break;
         case UI_ICON_USER:
-            ui_gfx_circle_fill(cx, cy - 2, 3, color);
-            ui_gfx_fill(cx - 4, cy + 2, 8, 5, color);
+            icon_badge_letter(x, y, s, color, 'U');
             break;
         case UI_ICON_DISC:
-            ui_gfx_ring(cx, cy, s / 2 - 2, 2, color);
-            ui_gfx_circle_fill(cx, cy, 2, color);
+            icon_badge_letter(x, y, s, color, 'C');
             break;
         case UI_ICON_SPEAKER:
-            ui_gfx_fill(x + 2, cy - 3, 4, 6, color);
-            {
-                int i;
-                for (i = 0; i < 5; i++) {
-                    ui_gfx_fill(x + 6 + i / 2, cy - i - 1, 1, i * 2 + 3, color);
-                }
-            }
+            icon_badge_letter(x, y, s, color, 'V');
             break;
         case UI_ICON_BATTERY:
-            ui_gfx_hairline_rect(x + 2, y + 4, s - 6, s - 8, color, 255);
-            ui_gfx_fill(x + s - 4, cy - 2, 2, 4, color);
-            ui_gfx_fill(x + 4, y + 6, s - 10, s - 12, color);
+            icon_badge_letter(x, y, s, color, 'B');
             break;
         case UI_ICON_BTN_X:
             ui_gfx_ring(cx, cy, s / 2 - 1, 2, color);
@@ -331,12 +307,7 @@ void ui_font_icon(int x, int y, int size, int icon, u32 color) {
             ui_gfx_ring(cx, cy, s / 2 - 4, 2, color);
             break;
         case UI_ICON_GEAR:
-            ui_gfx_ring(cx, cy, s / 2 - 3, 2, color);
-            ui_gfx_circle_fill(cx, cy, 2, color);
-            ui_gfx_fill(cx - 1, y + 2, 2, 3, color);
-            ui_gfx_fill(cx - 1, y + s - 5, 2, 3, color);
-            ui_gfx_fill(x + 2, cy - 1, 3, 2, color);
-            ui_gfx_fill(x + s - 5, cy - 1, 3, 2, color);
+            icon_badge_letter(x, y, s, color, 'G');
             break;
         default:
             break;

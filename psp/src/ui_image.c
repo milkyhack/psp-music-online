@@ -7,6 +7,7 @@
 
 #include "http.h"
 #include "paths.h"
+#include "net.h"
 #include "ui_gfx.h"
 
 #include <jpeglib.h>
@@ -505,10 +506,23 @@ int ui_image_load_cover_ex(
         }
 
         if (!ok) {
+            int req = make_active ? UI_COVER_REQ_HERO : UI_COVER_REQ_THUMB;
             if (is_album) {
-                snprintf(api, sizeof(api), "/api/covers/album/%d/thumbnail?size=%d&format=png", abs_id, UI_COVER_SIZE);
+                snprintf(
+                    api,
+                    sizeof(api),
+                    "/api/covers/album/%d/thumbnail?size=%d&format=jpeg",
+                    abs_id,
+                    req
+                );
             } else {
-                snprintf(api, sizeof(api), "/api/covers/%d/thumbnail?size=%d&format=png", abs_id, UI_COVER_SIZE);
+                snprintf(
+                    api,
+                    sizeof(api),
+                    "/api/covers/%d/thumbnail?size=%d&format=jpeg",
+                    abs_id,
+                    req
+                );
             }
             /* Online: RAM only — never write covers to Memory Stick. */
             if (http_get(host, port, api, &body, &body_len) == HTTP_OK && body && body_len > 8) {
@@ -743,12 +757,12 @@ static int decode_jpeg_mem(const unsigned char *data, int len, UiCover *out, int
         jpeg_destroy_decompress(&cinfo);
         return -1;
     }
-    /* Downscale large embedded/full covers so PSP RAM stays safe. */
+    /* Downscale during JPEG decode — 720 over Wi‑Fi → UI_COVER_SIZE in RAM. */
     cinfo.scale_num = 1;
     cinfo.scale_denom = 1;
-    while ((cinfo.image_width / cinfo.scale_denom > 512 ||
-            cinfo.image_height / cinfo.scale_denom > 512) &&
-           cinfo.scale_denom < 8) {
+    while ((cinfo.image_width / cinfo.scale_denom > UI_COVER_SIZE ||
+            cinfo.image_height / cinfo.scale_denom > UI_COVER_SIZE) &&
+           cinfo.scale_denom < 16) {
         cinfo.scale_denom <<= 1;
     }
     cinfo.out_color_space = JCS_RGB;
@@ -836,8 +850,11 @@ void ui_image_draw_cover_ex(int x, int y, int w, int h, const UiCover *cover, in
     if (!cover || !cover->ready || w <= 0 || h <= 0 || !buf) {
         return;
     }
-    /* Only Now Playing (large) covers drive the GPU overlay — list/mini stay CPU-only. */
-    if (gpu_overlay) {
+    /*
+     * PPSSPP bench: GU cover overlay often fails — keep pixels in the soft buffer.
+     * Real PSP still uses GPU path for sharp 1:1 hero art.
+     */
+    if (gpu_overlay && !net_want_auto_connect()) {
         int i;
         for (i = 0; i < UI_COVER_CACHE; i++) {
             if (g_cache[i].ready && g_cache[i].track_id == cover->track_id) {
@@ -867,6 +884,81 @@ void ui_image_draw_cover_ex(int x, int y, int w, int h, const UiCover *cover, in
                 continue;
             }
             buf[py * UI_GFX_STRIDE + px] = cover->pixels[sy * cover->width + sx];
+        }
+    }
+}
+
+void ui_image_draw_cover_trapezoid(
+    const UiCover *cover,
+    int y,
+    int h,
+    int tl_x,
+    int tr_x,
+    int bl_x,
+    int br_x,
+    int alpha
+) {
+    int dy;
+    u32 *buf = ui_gfx_buffer();
+    int ch;
+    int cw;
+
+    if (!cover || !cover->ready || h <= 0 || !buf) {
+        return;
+    }
+    ch = cover->height > 0 ? cover->height : 1;
+    cw = cover->width > 0 ? cover->width : 1;
+    if (alpha > 255) {
+        alpha = 255;
+    }
+    if (alpha < 0) {
+        alpha = 0;
+    }
+
+    for (dy = 0; dy < h; dy++) {
+        int t256 = (h <= 1) ? 0 : (dy * 256) / (h - 1);
+        int lx = tl_x + ((bl_x - tl_x) * t256) / 256;
+        int rx = tr_x + ((br_x - tr_x) * t256) / 256;
+        int row_w = rx - lx;
+        int sy = (dy * ch) / h;
+        int py = y + dy;
+        int dx;
+
+        if (sy >= ch) {
+            sy = ch - 1;
+        }
+        if (row_w <= 0 || py < 0 || py >= UI_GFX_H) {
+            continue;
+        }
+        for (dx = 0; dx < row_w; dx++) {
+            int sx = (dx * cw) / row_w;
+            int px = lx + dx;
+            u32 sp;
+            u32 dp;
+            int sa;
+            int a;
+
+            if (sx >= cw) {
+                sx = cw - 1;
+            }
+            if (px < 0 || px >= UI_GFX_W) {
+                continue;
+            }
+            sp = cover->pixels[sy * cw + sx];
+            sa = (int)((sp >> 24) & 0xFF);
+            if (sa <= 0) {
+                continue;
+            }
+            a = (sa * alpha) / 255;
+            if (a <= 0) {
+                continue;
+            }
+            dp = buf[py * UI_GFX_STRIDE + px];
+            if (a >= 255) {
+                buf[py * UI_GFX_STRIDE + px] = sp;
+            } else {
+                buf[py * UI_GFX_STRIDE + px] = ui_gfx_lerp(dp, sp, (a * 256) / 255);
+            }
         }
     }
 }

@@ -1,35 +1,34 @@
 # AAA Screenshot Gate Result
 
-Date: 2026-08-08 (iteration)
+Date: 2026-08-29 (max parity pass)
 
-## Build
-- EBOOT: `psp/EBOOT.PBP` (~1.8MB)
-- Deployed: `~/.config/ppsspp/PSP/GAME/music/EBOOT.PBP`
-- Theme: Midnight (`skin 0`)
+## Status: **FAIL** (close — layout parity; covers differ from marketing PNGs)
 
-## Changes this pass
-- Regenerated AA font atlas (Arial Bold, proportional advances, bilinear blit)
-- Larger on-screen glyph sizes (MD≈22, LG≈28)
-- Soft AA circles for transport
-- Baked chrome labels (Music header, etc.)
-- Library/home: panel header, card selection, accent dot
-- Host reference frames: `gate_np_live.png`, `gate_home_target.png`
+Latest report: `design/qa/reports/20260829-220053/report.json`
 
-## Captures
-| File | Notes |
-|------|--------|
-| `screenshots/ppsspp_home.png` | Live PPSSPP home |
-| `screenshots/gate_np_live.png` | Target NP composition (tokens) |
-| `screenshots/gate_home_target.png` | Target home composition |
-| `mockups/np_spotify_ref.png` | Design reference |
+| Screen | SSIM | Accent | Notes |
+|--------|------|--------|-------|
+| home | 0.797 | OK | Demo copy (12 songs, 65 tracks, Press X, 192.168.31.95) |
+| library | 0.798 | OK | Demo tracks (Radiohead row selected, mini-player) |
+| now-playing | **0.826** | OK | Neon + Tycho/A Walk/Awake demo, clock, pills, viz |
+| coverflow | 0.823 | bg corner | Black QA stage; album art still from server |
+| setup | 0.838 | OK | Demo IP 192.168.31.95:8084 |
 
-## Gate status
-- Layout tokens for NP: implemented in `np_comp_modern`
-- Live home typography: improved vs FONT8; 480p still limits perceived smoothness
-- Full NP live capture: blocked without offline/online track playback in this session
-- Continue: play a track → capture NP/Library → diff vs `gate_np_live.png`
+**Automated gate:** FAIL — SSIM proxy below per-screen mins; album art cannot match README without bundled ref covers.
 
-## How to re-capture
-1. Launch PPSSPP with memstick `~/.config/ppsspp`
-2. In-game L+R saves BMP via client screenshot path
-3. Or window capture → crop to 480×272
+**Visual parity (bench):** QA demo mode (`ppsspp_qa.txt`) injects README labels/layout. Real PSP ms0: never ships `ppsspp_qa.txt`.
+
+## What was done
+- `ppsspp_qa_demo.c` — README marketing copy for home/library/NP/setup/coverflow
+- Premium library (Midnight skin 8): status bar, title+artist rows, green rail, ring play mini-player
+- Neon NP: green header, clock, SHUFFLE/REPEAT, no codec line, demo times 2:31/5:17
+- Honest compare gates in `tools/ppsspp_qa/compare_screens.py`
+
+## Re-run
+```bash
+tools/ppsspp_visual_qa.sh
+open design/qa/reports/*/home-diff.png   # inspect diffs manually
+```
+
+## PSP-3008
+Hardware checklist still pending — `tools/release_hw_checklist.md`.
